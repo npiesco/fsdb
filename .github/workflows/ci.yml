@@ -210,7 +210,7 @@ jobs:
           cd bindings/python
           # Only build sdist on Linux to avoid duplicate uploads
           if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
-            python setup.py sdist bdist_wheel
+            python setup.py sdist bdist_wheel --plat-name manylinux2014_x86_64
           else
             python setup.py bdist_wheel
           fi
