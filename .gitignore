@@ -34,3 +34,6 @@ venv_spark/
 *.swp
 *.swo
 *~
+
+# Personal Files
+# POSIX_COMMANDS_STATUS.md
