@@ -561,10 +561,10 @@ fn get_current_memory_usage() -> u64 {
         for line in status.lines() {
             if line.starts_with("VmRSS:") {
                 let parts: Vec<&str> = line.split_whitespace().collect();
-                if parts.len() >= 2 {
-                    if let Ok(kb) = parts[1].parse::<u64>() {
-                        return kb * 1024; // Convert KB to bytes
-                    }
+                if parts.len() >= 2
+                    && let Ok(kb) = parts[1].parse::<u64>()
+                {
+                    return kb * 1024; // Convert KB to bytes
                 }
             }
         }
