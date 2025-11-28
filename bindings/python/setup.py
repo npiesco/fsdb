@@ -1,4 +1,4 @@
-from setuptools import setup
+from setuptools import setup, Distribution
 import platform
 from pathlib import Path
 
@@ -14,9 +14,15 @@ else:
 this_directory = Path(__file__).parent
 long_description = (this_directory / "README.md").read_text()
 
+# Force platform-specific wheel since we have native code
+class BinaryDistribution(Distribution):
+    def has_ext_modules(self):
+        return True
+
 setup(
     name="fsdb-py",
     version="0.2.11",
+    distclass=BinaryDistribution,
     description="High-performance Delta Lake database with POSIX interface and Python bindings",
     long_description=long_description,
     long_description_content_type="text/markdown",

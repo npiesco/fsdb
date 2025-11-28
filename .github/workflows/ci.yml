@@ -178,6 +178,13 @@ jobs:
         shell: bash
         run: |
           cp target/${{ matrix.target }}/release/${{ matrix.lib }} bindings/python/
+          ls -la bindings/python/
+          # Verify library was copied
+          if [ ! -f "bindings/python/${{ matrix.lib }}" ]; then
+            echo "Error: Library file not found in bindings/python/"
+            exit 1
+          fi
+          echo "✓ Library file copied successfully"
       
       - name: Update version
         run: |
@@ -207,6 +214,17 @@ jobs:
           else
             python setup.py bdist_wheel
           fi
+          echo "✓ Wheel built successfully"
+          ls -lh dist/
+      
+      - name: Verify wheel contents
+        shell: bash
+        run: |
+          cd bindings/python
+          pip install wheel
+          wheel_file=$(ls dist/*.whl | head -1)
+          echo "Inspecting wheel: $wheel_file"
+          python -m zipfile -l "$wheel_file" | grep -E "\.(dylib|so|dll)" || echo "WARNING: No native library found in wheel!"
       
       - name: Publish to PyPI
         env:
