@@ -97,16 +97,13 @@ jobs:
             minio/mc:latest \
             -c "mc alias set myminio http://localhost:9000 minioadmin minioadmin && mc mb myminio/fsdb-test || true"
       
-      - name: Run integration tests
+      - name: Run S3 integration tests
         env:
           MINIO_ENDPOINT: http://localhost:9000
           MINIO_ACCESS_KEY: minioadmin
           MINIO_SECRET_KEY: minioadmin
           MINIO_BUCKET: fsdb-test
-        run: cargo test --test integration_test --verbose
-      
-      - name: Run concurrent tests
-        run: cargo test --test concurrent_test --verbose
+        run: cargo test --test s3_test --verbose
       
       - name: Stop MinIO
         if: always()
