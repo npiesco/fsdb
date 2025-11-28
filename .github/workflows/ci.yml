@@ -93,12 +93,9 @@ jobs:
       
       - name: Setup MinIO bucket
         run: |
-          docker run --rm --network=host \
+          docker run --rm --network=host --entrypoint /bin/sh \
             minio/mc:latest \
-            sh -c "
-            mc alias set myminio http://localhost:9000 minioadmin minioadmin &&
-            mc mb myminio/fsdb-test || true
-            "
+            -c "mc alias set myminio http://localhost:9000 minioadmin minioadmin && mc mb myminio/fsdb-test || true"
       
       - name: Run integration tests
         env:
