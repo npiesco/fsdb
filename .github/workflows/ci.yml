@@ -156,19 +156,27 @@ jobs:
           pip install setuptools wheel twine uniffi-bindgen
       
       - name: Build Rust library
+        shell: bash
         run: |
           cd fsdb
-          cargo build --release --lib --target ${{ matrix.target }}
+          cargo build --release --target ${{ matrix.target }}
+          ls -la target/${{ matrix.target }}/release/ | grep libfsdb || echo "Library not found!"
       
       - name: Generate UniFFI bindings
+        shell: bash
         run: |
           cd fsdb
+          if [ ! -f "target/${{ matrix.target }}/release/${{ matrix.lib }}" ]; then
+            echo "Error: Library not found at target/${{ matrix.target }}/release/${{ matrix.lib }}"
+            exit 1
+          fi
           cargo run --bin uniffi-bindgen -- generate \
             --library target/${{ matrix.target }}/release/${{ matrix.lib }} \
             --language python \
             --out-dir ../bindings/python
       
       - name: Copy library to bindings
+        shell: bash
         run: |
           cp fsdb/target/${{ matrix.target }}/release/${{ matrix.lib }} bindings/python/
       
