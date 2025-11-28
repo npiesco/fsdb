@@ -1,7 +1,7 @@
 // Time Travel Integration Tests
 // Tests Delta Lake time travel features: query historical versions
 
-use arrow::array::{ArrayRef, Int32Array, StringArray, RecordBatch};
+use arrow::array::{ArrayRef, Int32Array, RecordBatch, StringArray};
 use arrow::datatypes::{DataType, Field, Schema};
 use fsdb::DatabaseOps;
 use std::sync::Arc;
@@ -34,7 +34,10 @@ async fn test_time_travel_by_version() {
     db.insert(batch1).await.expect("Failed to insert batch 1");
 
     // Verify we have 2 rows
-    let results = db.query("SELECT COUNT(*) as count FROM data").await.unwrap();
+    let results = db
+        .query("SELECT COUNT(*) as count FROM data")
+        .await
+        .unwrap();
     let count = results[0]
         .column(0)
         .as_any()
@@ -55,7 +58,10 @@ async fn test_time_travel_by_version() {
     db.insert(batch2).await.expect("Failed to insert batch 2");
 
     // Current version has 4 rows
-    let results = db.query("SELECT COUNT(*) as count FROM data").await.unwrap();
+    let results = db
+        .query("SELECT COUNT(*) as count FROM data")
+        .await
+        .unwrap();
     let count = results[0]
         .column(0)
         .as_any()
@@ -76,7 +82,10 @@ async fn test_time_travel_by_version() {
     db.insert(batch3).await.expect("Failed to insert batch 3");
 
     // Current version has 6 rows
-    let results = db.query("SELECT COUNT(*) as count FROM data").await.unwrap();
+    let results = db
+        .query("SELECT COUNT(*) as count FROM data")
+        .await
+        .unwrap();
     let count = results[0]
         .column(0)
         .as_any()
@@ -91,7 +100,10 @@ async fn test_time_travel_by_version() {
         .await
         .expect("Failed to query version 1");
     let total_rows_v1: usize = results_v1.iter().map(|b| b.num_rows()).sum();
-    assert_eq!(total_rows_v1, 2, "Version 1 (first insert) should return 2 rows");
+    assert_eq!(
+        total_rows_v1, 2,
+        "Version 1 (first insert) should return 2 rows"
+    );
 
     // Verify version 1 data content
     let ids = results_v1[0]
@@ -123,7 +135,10 @@ async fn test_time_travel_by_version() {
     assert_eq!(count_v2, 4, "Version 2 (second insert) should have 4 rows");
 
     // Verify current version still has 6 rows (time travel doesn't affect current state)
-    let results_current = db.query("SELECT COUNT(*) as count FROM data").await.unwrap();
+    let results_current = db
+        .query("SELECT COUNT(*) as count FROM data")
+        .await
+        .unwrap();
     let count_current = results_current[0]
         .column(0)
         .as_any()
@@ -204,7 +219,10 @@ async fn test_time_travel_by_timestamp() {
     db.insert(batch3).await.expect("Failed to insert batch 3");
 
     // Current state has 3 rows
-    let results = db.query("SELECT COUNT(*) as count FROM data").await.unwrap();
+    let results = db
+        .query("SELECT COUNT(*) as count FROM data")
+        .await
+        .unwrap();
     let count = results[0]
         .column(0)
         .as_any()
@@ -237,7 +255,10 @@ async fn test_time_travel_by_timestamp() {
         .downcast_ref::<arrow::array::Int64Array>()
         .unwrap()
         .value(0);
-    assert_eq!(count_t2, 2, "At t2 (after second insert) should have 2 rows");
+    assert_eq!(
+        count_t2, 2,
+        "At t2 (after second insert) should have 2 rows"
+    );
 
     println!("✓ Time travel by timestamp working correctly");
 }
@@ -262,15 +283,19 @@ async fn test_time_travel_with_deletion() {
         schema.clone(),
         vec![
             Arc::new(Int32Array::from(vec![1, 2, 3, 4])) as ArrayRef,
-            Arc::new(StringArray::from(vec!["active", "active", "active", "active"]))
-                as ArrayRef,
+            Arc::new(StringArray::from(vec![
+                "active", "active", "active", "active",
+            ])) as ArrayRef,
         ],
     )
     .unwrap();
     db.insert(batch1).await.expect("Failed to insert");
 
     // Verify 4 rows
-    let results = db.query("SELECT COUNT(*) as count FROM data").await.unwrap();
+    let results = db
+        .query("SELECT COUNT(*) as count FROM data")
+        .await
+        .unwrap();
     let count = results[0]
         .column(0)
         .as_any()
@@ -285,7 +310,10 @@ async fn test_time_travel_with_deletion() {
         .expect("Failed to delete rows");
 
     // Current version has 2 rows
-    let results = db.query("SELECT COUNT(*) as count FROM data").await.unwrap();
+    let results = db
+        .query("SELECT COUNT(*) as count FROM data")
+        .await
+        .unwrap();
     let count = results[0]
         .column(0)
         .as_any()
@@ -305,7 +333,10 @@ async fn test_time_travel_with_deletion() {
         .downcast_ref::<arrow::array::Int64Array>()
         .unwrap()
         .value(0);
-    assert_eq!(count_v1, 4, "Version 1 (before deletion) should have 4 rows");
+    assert_eq!(
+        count_v1, 4,
+        "Version 1 (before deletion) should have 4 rows"
+    );
 
     // Verify deleted rows are visible in version 1
     let results_v1_data = db
@@ -317,4 +348,3 @@ async fn test_time_travel_with_deletion() {
 
     println!("✓ Time travel with deletion working correctly");
 }
-

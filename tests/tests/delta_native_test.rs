@@ -18,7 +18,9 @@ async fn test_create_fsdb_with_delta_native_mode() {
     ]));
 
     // Create FSDB database in Delta Lake native mode
-    let db = DatabaseOps::create_with_delta_native(db_path.clone(), schema.clone()).await.unwrap();
+    let db = DatabaseOps::create_with_delta_native(db_path.clone(), schema.clone())
+        .await
+        .unwrap();
 
     // Insert a batch
     let batch = RecordBatch::try_new(
@@ -32,12 +34,18 @@ async fn test_create_fsdb_with_delta_native_mode() {
     db.insert(batch).await.unwrap();
 
     // Verify Delta Lake directory structure exists
-    assert!(db_path.join("_delta_log").exists(), "Delta Lake log directory should exist");
-    
+    assert!(
+        db_path.join("_delta_log").exists(),
+        "Delta Lake log directory should exist"
+    );
+
     // Verify at least one transaction log file exists
     let delta_log_dir = std::fs::read_dir(db_path.join("_delta_log")).unwrap();
     let log_files: Vec<_> = delta_log_dir.collect();
-    assert!(log_files.len() > 0, "Delta Lake transaction log should have at least one file");
+    assert!(
+        log_files.len() > 0,
+        "Delta Lake transaction log should have at least one file"
+    );
 
     // Query via FSDB API should work
     let results = db.query("SELECT * FROM data").await.unwrap();
@@ -70,32 +78,31 @@ async fn test_open_existing_delta_table_with_fsdb() {
     // Write using delta-rs
     use deltalake::DeltaOps;
     use url::Url;
-    
+
     // Create directory first
     std::fs::create_dir_all(&db_path).unwrap();
-    
+
     let table_url = Url::from_directory_path(&db_path).unwrap();
     let ops = DeltaOps::try_from_uri(table_url).await.unwrap();
-    
+
     let schema_fields = vec![
         deltalake::kernel::StructField::new("id", deltalake::kernel::DataType::INTEGER, false),
         deltalake::kernel::StructField::new("message", deltalake::kernel::DataType::STRING, false),
     ];
     let delta_schema = deltalake::kernel::StructType::try_new(schema_fields).unwrap();
-    
+
     let table = ops
         .create()
         .with_columns(delta_schema.fields().cloned())
         .await
         .unwrap();
 
-    DeltaOps(table)
-        .write(vec![batch])
-        .await
-        .unwrap();
+    DeltaOps(table).write(vec![batch]).await.unwrap();
 
     // Now open with FSDB in Delta native mode
-    let db = DatabaseOps::open_delta_native(db_path.clone()).await.unwrap();
+    let db = DatabaseOps::open_delta_native(db_path.clone())
+        .await
+        .unwrap();
 
     // Query via FSDB API
     let results = db.query("SELECT * FROM data WHERE id > 1").await.unwrap();
@@ -114,7 +121,10 @@ async fn test_open_existing_delta_table_with_fsdb() {
     db.insert(new_batch).await.unwrap();
 
     // Verify total count
-    let all_results = db.query("SELECT COUNT(*) as count FROM data").await.unwrap();
+    let all_results = db
+        .query("SELECT COUNT(*) as count FROM data")
+        .await
+        .unwrap();
     let count = all_results[0]
         .column(0)
         .as_any()
@@ -136,7 +146,11 @@ async fn test_delta_native_transaction_commit() {
         Field::new("value", DataType::Int32, false),
     ]));
 
-    let db = Arc::new(DatabaseOps::create_with_delta_native(db_path.clone(), schema.clone()).await.unwrap());
+    let db = Arc::new(
+        DatabaseOps::create_with_delta_native(db_path.clone(), schema.clone())
+            .await
+            .unwrap(),
+    );
 
     // Begin transaction and insert multiple batches
     let txn = db.begin_transaction().await.unwrap();
@@ -165,7 +179,10 @@ async fn test_delta_native_transaction_commit() {
     txn.commit().await.unwrap();
 
     // Verify data is present
-    let results = db.query("SELECT COUNT(*) as count FROM data").await.unwrap();
+    let results = db
+        .query("SELECT COUNT(*) as count FROM data")
+        .await
+        .unwrap();
     let count = results[0]
         .column(0)
         .as_any()
@@ -173,10 +190,13 @@ async fn test_delta_native_transaction_commit() {
         .unwrap()
         .value(0);
     assert_eq!(count, 2, "Should have 2 rows");
-    
+
     // Verify Delta Lake transaction log structure
     let delta_log_files: Vec<_> = std::fs::read_dir(db_path.join("_delta_log"))
         .unwrap()
         .collect();
-    assert!(delta_log_files.len() > 0, "Should have Delta Lake transaction log files");
+    assert!(
+        delta_log_files.len() > 0,
+        "Should have Delta Lake transaction log files"
+    );
 }

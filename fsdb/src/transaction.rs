@@ -2,7 +2,7 @@
 //!
 //! Provides user-controlled transaction boundaries with ACID guarantees.
 
-use crate::{Result, Error, database_ops::DatabaseOps};
+use crate::{database_ops::DatabaseOps, Error, Result};
 use arrow::record_batch::RecordBatch;
 use std::sync::Arc;
 
@@ -18,32 +18,28 @@ enum TxnLifecycleState {
 pub struct Transaction {
     /// Reference to the database
     db: Arc<DatabaseOps>,
-    
+
     /// Transaction ID
     #[allow(dead_code)]
     txn_id: u64,
-    
+
     /// Snapshot for this transaction (MVCC isolation)
     #[allow(dead_code)]
     snapshot_version: u64,
-    
+
     /// Snapshot of committed data at transaction start (for snapshot isolation)
     snapshot_data: Arc<tokio::sync::Mutex<Option<Vec<RecordBatch>>>>,
-    
+
     /// Uncommitted write buffer (RecordBatches to be written on commit)
     write_buffer: Arc<tokio::sync::Mutex<Vec<RecordBatch>>>,
-    
+
     /// Transaction lifecycle state
     state: Arc<tokio::sync::Mutex<TxnLifecycleState>>,
 }
 
 impl Transaction {
     /// Create a new transaction
-    pub(crate) fn new(
-        db: Arc<DatabaseOps>,
-        txn_id: u64,
-        snapshot_version: u64,
-    ) -> Self {
+    pub(crate) fn new(db: Arc<DatabaseOps>, txn_id: u64, snapshot_version: u64) -> Self {
         Self {
             db,
             txn_id,
@@ -73,43 +69,43 @@ impl Transaction {
     }
 
     /// Query data within this transaction (includes uncommitted writes)
-    /// 
+    ///
     /// Implements snapshot isolation: queries see committed data as of transaction start
     /// plus uncommitted writes from this transaction.
     pub async fn query(&self, sql: &str) -> Result<Vec<RecordBatch>> {
-        use datafusion::prelude::*;
         use datafusion::datasource::MemTable;
-        
+        use datafusion::prelude::*;
+
         // Lazy-load snapshot on first query
         {
             let snapshot = self.snapshot_data.lock().await;
             if snapshot.is_none() {
                 drop(snapshot);
-                
+
                 // Capture snapshot of committed data
                 let committed = self.db.query("SELECT * FROM data").await?;
-                
+
                 let mut snapshot = self.snapshot_data.lock().await;
                 *snapshot = Some(committed);
             }
         }
-        
+
         // Get clones of snapshot and buffer for processing
         let snapshot = self.snapshot_data.lock().await;
         let committed_batches = snapshot.as_ref().unwrap().clone();
         drop(snapshot);
-        
+
         let buffer = self.write_buffer.lock().await;
         let uncommitted_batches = buffer.clone();
         drop(buffer);
-        
+
         let has_committed = !committed_batches.is_empty();
         let has_uncommitted = !uncommitted_batches.is_empty();
-        
+
         // Case 1: No uncommitted writes - query snapshot only
         if !has_uncommitted {
             let ctx = SessionContext::new();
-            
+
             if has_committed {
                 let schema = committed_batches[0].schema();
                 let table = MemTable::try_new(schema, vec![committed_batches])?;
@@ -117,43 +113,48 @@ impl Transaction {
             } else {
                 // Empty table - create empty RecordBatch with schema
                 let empty_batch = RecordBatch::new_empty(self.db.schema.clone());
-                let empty_table = MemTable::try_new(self.db.schema.clone(), vec![vec![empty_batch]])?;
+                let empty_table =
+                    MemTable::try_new(self.db.schema.clone(), vec![vec![empty_batch]])?;
                 ctx.register_table("data", Arc::new(empty_table))?;
             }
-            
+
             let df = ctx.sql(sql).await?;
             return Ok(df.collect().await?);
         }
 
         // Case 2: Has uncommitted writes - create union view
         let ctx = SessionContext::new();
-        
+
         if has_committed {
             // Compute unified schema to handle schema evolution
             let mut all_batches = committed_batches.clone();
             all_batches.extend(uncommitted_batches.clone());
             let unified_schema = self.db.compute_unified_schema(&all_batches)?;
-            
+
             // Rebuild committed batches with unified schema (add NULL columns for missing fields)
             let mut unified_committed = Vec::new();
             for batch in &committed_batches {
                 let unified_batch = self.db.unify_batch_schema(batch, &unified_schema)?;
                 unified_committed.push(unified_batch);
             }
-            let committed_table = MemTable::try_new(unified_schema.clone(), vec![unified_committed])?;
+            let committed_table =
+                MemTable::try_new(unified_schema.clone(), vec![unified_committed])?;
             ctx.register_table("committed_data", Arc::new(committed_table))?;
-            
+
             // Rebuild uncommitted batches with unified schema (add NULL columns for missing fields)
             let mut unified_uncommitted = Vec::new();
             for batch in &uncommitted_batches {
                 let unified_batch = self.db.unify_batch_schema(batch, &unified_schema)?;
                 unified_uncommitted.push(unified_batch);
             }
-            let uncommitted_table = MemTable::try_new(unified_schema.clone(), vec![unified_uncommitted])?;
+            let uncommitted_table =
+                MemTable::try_new(unified_schema.clone(), vec![unified_uncommitted])?;
             ctx.register_table("uncommitted_data", Arc::new(uncommitted_table))?;
-            
+
             // Create union to combine both (now with matching schemas)
-            let union_df = ctx.sql("SELECT * FROM committed_data UNION ALL SELECT * FROM uncommitted_data").await?;
+            let union_df = ctx
+                .sql("SELECT * FROM committed_data UNION ALL SELECT * FROM uncommitted_data")
+                .await?;
             ctx.register_table("data", union_df.into_view())?;
         } else {
             // No committed data - just register uncommitted directly as "data"
@@ -161,11 +162,11 @@ impl Transaction {
             let uncommitted_table = MemTable::try_new(schema, vec![uncommitted_batches])?;
             ctx.register_table("data", Arc::new(uncommitted_table))?;
         }
-        
+
         // Execute the user's query on the combined view
         let df = ctx.sql(sql).await?;
         let results = df.collect().await?;
-        
+
         Ok(results)
     }
 
@@ -236,4 +237,3 @@ impl Transaction {
         Ok(())
     }
 }
-

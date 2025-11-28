@@ -6,4 +6,3 @@ pub mod pruning;
 
 pub use datafusion_provider::FsdbTableProvider;
 pub use executor::QueryExecutor;
-

@@ -142,17 +142,17 @@ jobs:
         uses: docker/setup-buildx-action@v3
       
       - name: Start services
-        run: docker-compose up -d minio minio-init
+        run: docker compose up -d minio minio-init
       
       - name: Wait for services
         run: sleep 10
       
       - name: Run tests in Docker
-        run: docker-compose run --rm test-linux
+        run: docker compose run --rm test-linux
       
       - name: Stop services
         if: always()
-        run: docker-compose down -v
+        run: docker compose down -v
 
   # Documentation build
   docs:

@@ -37,6 +37,12 @@ pub struct RoleManager {
     roles: std::collections::HashMap<String, Role>,
 }
 
+impl Default for RoleManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RoleManager {
     /// Create a new role manager with default roles
     pub fn new() -> Self {
@@ -45,14 +51,17 @@ impl RoleManager {
         // Admin role - all permissions
         roles.insert(
             "admin".to_string(),
-            Role::new("admin".to_string(), vec![
-                Permission::Read,
-                Permission::Write,
-                Permission::Delete,
-                Permission::Admin,
-                Permission::Backup,
-                Permission::Restore,
-            ]),
+            Role::new(
+                "admin".to_string(),
+                vec![
+                    Permission::Read,
+                    Permission::Write,
+                    Permission::Delete,
+                    Permission::Admin,
+                    Permission::Backup,
+                    Permission::Restore,
+                ],
+            ),
         );
 
         // Read role - only read permission
@@ -111,9 +120,17 @@ mod tests {
         assert!(!manager.has_permission(&["write".to_string()], &Permission::Delete));
 
         // Multiple roles combine permissions
-        assert!(manager.has_permission(&["read".to_string(), "write".to_string()], &Permission::Read));
-        assert!(manager.has_permission(&["read".to_string(), "write".to_string()], &Permission::Write));
-        assert!(!manager.has_permission(&["read".to_string(), "write".to_string()], &Permission::Delete));
+        assert!(manager.has_permission(
+            &["read".to_string(), "write".to_string()],
+            &Permission::Read
+        ));
+        assert!(manager.has_permission(
+            &["read".to_string(), "write".to_string()],
+            &Permission::Write
+        ));
+        assert!(!manager.has_permission(
+            &["read".to_string(), "write".to_string()],
+            &Permission::Delete
+        ));
     }
 }
-

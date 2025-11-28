@@ -1,6 +1,6 @@
 //! Authentication module with bcrypt password hashing
 
-use crate::{Result, Error};
+use crate::{Error, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
@@ -79,6 +79,12 @@ pub struct UserStore {
     users: HashMap<String, User>,
 }
 
+impl Default for UserStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl UserStore {
     /// Create a new empty user store
     pub fn new() -> Self {
@@ -102,26 +108,29 @@ impl UserStore {
     /// Save user store to disk
     pub fn save<P: AsRef<Path>>(&self, path: P) -> Result<()> {
         let path = path.as_ref();
-        
+
         // Ensure parent directory exists
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
         }
 
         let json = serde_json::to_string_pretty(self)?;
-        
+
         // Atomic write: .tmp → rename
         let tmp_path = path.with_extension("tmp");
         std::fs::write(&tmp_path, json)?;
         std::fs::rename(tmp_path, path)?;
-        
+
         Ok(())
     }
 
     /// Add a new user
     pub fn add_user(&mut self, user: User) -> Result<()> {
         if self.users.contains_key(&user.username) {
-            return Err(Error::Other(format!("User already exists: {}", user.username)));
+            return Err(Error::Other(format!(
+                "User already exists: {}",
+                user.username
+            )));
         }
 
         self.users.insert(user.username.clone(), user);
@@ -135,19 +144,25 @@ impl UserStore {
 
     /// Authenticate a user with credentials
     pub fn authenticate(&self, username: &str, password: &str) -> Result<AuthContext> {
-        let user = self.get_user(username)
+        let user = self
+            .get_user(username)
             .ok_or_else(|| Error::Other("Invalid credentials".to_string()))?;
 
         if !user.verify_password(password) {
             return Err(Error::Other("Invalid credentials".to_string()));
         }
 
-        Ok(AuthContext::authenticated(user.username.clone(), user.roles.clone()))
+        Ok(AuthContext::authenticated(
+            user.username.clone(),
+            user.roles.clone(),
+        ))
     }
 
     /// Remove a role from a user
     pub fn revoke_role(&mut self, username: &str, role: &str) -> Result<()> {
-        let user = self.users.get_mut(username)
+        let user = self
+            .users
+            .get_mut(username)
             .ok_or_else(|| Error::Other(format!("User not found: {}", username)))?;
 
         user.roles.retain(|r| r != role);
@@ -156,13 +171,22 @@ impl UserStore {
 
     /// Add a role to a user
     pub fn grant_role(&mut self, username: &str, role: &str) -> Result<()> {
-        let user = self.users.get_mut(username)
+        let user = self
+            .users
+            .get_mut(username)
             .ok_or_else(|| Error::Other(format!("User not found: {}", username)))?;
 
         if !user.roles.contains(&role.to_string()) {
             user.roles.push(role.to_string());
         }
         Ok(())
+    }
+}
+
+impl User {
+    /// Check if user has a specific role
+    pub fn has_role(&self, role: &str) -> bool {
+        self.roles.iter().any(|r| r == role)
     }
 }
 
@@ -173,10 +197,10 @@ mod tests {
     #[test]
     fn test_password_hashing() {
         let user = User::new("test".to_string(), "password123", vec!["read".to_string()]).unwrap();
-        
+
         // Password should be hashed
         assert_ne!(user.password_hash, "password123");
-        assert!(user.password_hash.starts_with("$2"));  // bcrypt marker
+        assert!(user.password_hash.starts_with("$2")); // bcrypt marker
 
         // Correct password verifies
         assert!(user.verify_password("password123"));
@@ -188,7 +212,7 @@ mod tests {
     #[test]
     fn test_user_store() {
         let mut store = UserStore::new();
-        
+
         let user = User::new("alice".to_string(), "secret", vec!["admin".to_string()]).unwrap();
         store.add_user(user).unwrap();
 
@@ -232,11 +256,3 @@ mod tests {
         assert!(user.has_role("write"));
     }
 }
-
-impl User {
-    /// Check if user has a specific role
-    pub fn has_role(&self, role: &str) -> bool {
-        self.roles.iter().any(|r| r == role)
-    }
-}
-

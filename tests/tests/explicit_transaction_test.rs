@@ -1,7 +1,7 @@
-use fsdb::database_ops::DatabaseOps;
 use arrow::array::{Int32Array, Int64Array, StringArray};
 use arrow::datatypes::{DataType, Field, Schema as ArrowSchema};
 use arrow::record_batch::RecordBatch;
+use fsdb::database_ops::DatabaseOps;
 use std::sync::Arc;
 use tempfile::TempDir;
 
@@ -18,7 +18,11 @@ async fn test_explicit_transaction_basic() {
     ]));
 
     // Create database
-    let db = Arc::new(DatabaseOps::create(db_path.clone(), schema.clone()).await.unwrap());
+    let db = Arc::new(
+        DatabaseOps::create(db_path.clone(), schema.clone())
+            .await
+            .unwrap(),
+    );
 
     // Begin explicit transaction
     let txn = db.begin_transaction().await.unwrap();
@@ -55,7 +59,11 @@ async fn test_transaction_batches_multiple_inserts() {
         Field::new("value", DataType::Utf8, false),
     ]));
 
-    let db = Arc::new(DatabaseOps::create(db_path.clone(), schema.clone()).await.unwrap());
+    let db = Arc::new(
+        DatabaseOps::create(db_path.clone(), schema.clone())
+            .await
+            .unwrap(),
+    );
 
     // Begin transaction
     let txn = db.begin_transaction().await.unwrap();
@@ -80,7 +88,10 @@ async fn test_transaction_batches_multiple_inserts() {
     txn.commit().await.unwrap();
 
     // Verify all 6 rows are present
-    let results = db.query("SELECT COUNT(*) as count FROM data").await.unwrap();
+    let results = db
+        .query("SELECT COUNT(*) as count FROM data")
+        .await
+        .unwrap();
     let count_array = results[0]
         .column(0)
         .as_any()
@@ -103,7 +114,11 @@ async fn test_transaction_rollback() {
         Field::new("name", DataType::Utf8, false),
     ]));
 
-    let db = Arc::new(DatabaseOps::create(db_path.clone(), schema.clone()).await.unwrap());
+    let db = Arc::new(
+        DatabaseOps::create(db_path.clone(), schema.clone())
+            .await
+            .unwrap(),
+    );
 
     // Begin transaction
     let txn = db.begin_transaction().await.unwrap();
@@ -123,7 +138,10 @@ async fn test_transaction_rollback() {
     txn.rollback().await.unwrap();
 
     // Verify no data was persisted
-    let results = db.query("SELECT COUNT(*) as count FROM data").await.unwrap();
+    let results = db
+        .query("SELECT COUNT(*) as count FROM data")
+        .await
+        .unwrap();
     let count_array = results[0]
         .column(0)
         .as_any()
@@ -143,7 +161,11 @@ async fn test_transaction_read_your_own_writes() {
         Field::new("value", DataType::Int32, false),
     ]));
 
-    let db = Arc::new(DatabaseOps::create(db_path.clone(), schema.clone()).await.unwrap());
+    let db = Arc::new(
+        DatabaseOps::create(db_path.clone(), schema.clone())
+            .await
+            .unwrap(),
+    );
 
     let txn = db.begin_transaction().await.unwrap();
 
@@ -160,7 +182,11 @@ async fn test_transaction_read_your_own_writes() {
 
     // Query within transaction - should see uncommitted data
     let results = txn.query("SELECT * FROM data").await.unwrap();
-    assert_eq!(results[0].num_rows(), 1, "Should see own uncommitted writes");
+    assert_eq!(
+        results[0].num_rows(),
+        1,
+        "Should see own uncommitted writes"
+    );
 
     // Insert batch 2
     let batch2 = RecordBatch::try_new(
@@ -174,19 +200,29 @@ async fn test_transaction_read_your_own_writes() {
     txn.insert(batch2).await.unwrap();
 
     // Query again - should see both batches
-    let results = txn.query("SELECT COUNT(*) as count FROM data").await.unwrap();
+    let results = txn
+        .query("SELECT COUNT(*) as count FROM data")
+        .await
+        .unwrap();
     let count_array = results[0]
         .column(0)
         .as_any()
         .downcast_ref::<Int64Array>()
         .unwrap();
-    assert_eq!(count_array.value(0), 2, "Should see both uncommitted batches");
+    assert_eq!(
+        count_array.value(0),
+        2,
+        "Should see both uncommitted batches"
+    );
 
     // Commit
     txn.commit().await.unwrap();
 
     // Query from database level - should now see committed data
-    let results = db.query("SELECT COUNT(*) as count FROM data").await.unwrap();
+    let results = db
+        .query("SELECT COUNT(*) as count FROM data")
+        .await
+        .unwrap();
     let count_array = results[0]
         .column(0)
         .as_any()
@@ -206,7 +242,11 @@ async fn test_transaction_isolation() {
         Field::new("value", DataType::Int32, false),
     ]));
 
-    let db = Arc::new(DatabaseOps::create(db_path.clone(), schema.clone()).await.unwrap());
+    let db = Arc::new(
+        DatabaseOps::create(db_path.clone(), schema.clone())
+            .await
+            .unwrap(),
+    );
 
     // Transaction 1: insert but don't commit yet
     let txn1 = db.begin_transaction().await.unwrap();
@@ -222,7 +262,10 @@ async fn test_transaction_isolation() {
 
     // Transaction 2: query - should NOT see txn1's uncommitted data
     let txn2 = db.begin_transaction().await.unwrap();
-    let results = txn2.query("SELECT COUNT(*) as count FROM data").await.unwrap();
+    let results = txn2
+        .query("SELECT COUNT(*) as count FROM data")
+        .await
+        .unwrap();
     let count_array = results[0]
         .column(0)
         .as_any()
@@ -238,7 +281,10 @@ async fn test_transaction_isolation() {
     txn1.commit().await.unwrap();
 
     // New query in txn2 should still not see committed data (snapshot isolation)
-    let results = txn2.query("SELECT COUNT(*) as count FROM data").await.unwrap();
+    let results = txn2
+        .query("SELECT COUNT(*) as count FROM data")
+        .await
+        .unwrap();
     let count_array = results[0]
         .column(0)
         .as_any()
@@ -254,7 +300,10 @@ async fn test_transaction_isolation() {
 
     // New transaction should see txn1's committed data
     let txn3 = db.begin_transaction().await.unwrap();
-    let results = txn3.query("SELECT COUNT(*) as count FROM data").await.unwrap();
+    let results = txn3
+        .query("SELECT COUNT(*) as count FROM data")
+        .await
+        .unwrap();
     let count_array = results[0]
         .column(0)
         .as_any()
@@ -279,7 +328,11 @@ async fn test_transaction_with_delete() {
         Field::new("status", DataType::Utf8, false),
     ]));
 
-    let db = Arc::new(DatabaseOps::create(db_path.clone(), schema.clone()).await.unwrap());
+    let db = Arc::new(
+        DatabaseOps::create(db_path.clone(), schema.clone())
+            .await
+            .unwrap(),
+    );
 
     // Insert initial data
     let txn1 = db.begin_transaction().await.unwrap();
@@ -287,7 +340,9 @@ async fn test_transaction_with_delete() {
         schema.clone(),
         vec![
             Arc::new(Int32Array::from(vec![1, 2, 3, 4])),
-            Arc::new(StringArray::from(vec!["active", "inactive", "active", "inactive"])),
+            Arc::new(StringArray::from(vec![
+                "active", "inactive", "active", "inactive",
+            ])),
         ],
     )
     .unwrap();
@@ -300,7 +355,10 @@ async fn test_transaction_with_delete() {
     txn2.commit().await.unwrap();
 
     // Verify only active rows remain
-    let results = db.query("SELECT COUNT(*) as count FROM data").await.unwrap();
+    let results = db
+        .query("SELECT COUNT(*) as count FROM data")
+        .await
+        .unwrap();
     let count_array = results[0]
         .column(0)
         .as_any()
@@ -308,4 +366,3 @@ async fn test_transaction_with_delete() {
         .unwrap();
     assert_eq!(count_array.value(0), 2, "Should have 2 active rows");
 }
-

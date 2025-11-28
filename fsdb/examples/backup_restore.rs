@@ -7,7 +7,7 @@
 //! - Backup verification
 //! - Backup metadata inspection
 
-use arrow::array::{ArrayRef, Int32Array, StringArray, RecordBatch};
+use arrow::array::{ArrayRef, Int32Array, RecordBatch, StringArray};
 use arrow::datatypes::{DataType, Field, Schema};
 use fsdb::DatabaseOps;
 use std::sync::Arc;
@@ -26,7 +26,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let db_path = "/tmp/fsdb_example_backup_original";
     let backup_path = "/tmp/fsdb_example_backup";
     let restore_path = "/tmp/fsdb_example_restore";
-    
+
     // Clean up from previous runs
     let _ = std::fs::remove_dir_all(db_path);
     let _ = std::fs::remove_dir_all(backup_path);
@@ -40,7 +40,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Field::new("amount", DataType::Int32, false),
         Field::new("status", DataType::Utf8, false),
     ]));
-    
+
     let db = DatabaseOps::create(db_path, schema.clone()).await?;
     println!("   ✓ Database created");
 
@@ -52,7 +52,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Arc::new(Int32Array::from(vec![1001, 1002, 1003])) as ArrayRef,
             Arc::new(StringArray::from(vec!["Alice", "Bob", "Charlie"])) as ArrayRef,
             Arc::new(Int32Array::from(vec![100, 200, 150])) as ArrayRef,
-            Arc::new(StringArray::from(vec!["completed", "completed", "completed"])) as ArrayRef,
+            Arc::new(StringArray::from(vec![
+                "completed",
+                "completed",
+                "completed",
+            ])) as ArrayRef,
         ],
     )?;
     db.insert(batch1).await?;
@@ -100,7 +104,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     )?;
     db.insert(batch3).await?;
     println!("   ✓ Inserted 2 more transactions (txn_id=3)");
-    
+
     let _current_count = db.query("SELECT COUNT(*) FROM data").await?;
     println!("   ✓ Current database: 7 total transactions");
 
@@ -125,14 +129,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n9. Point-in-time recovery (restore to Transaction 1)...");
     let pitr_path = "/tmp/fsdb_example_pitr";
     let _ = std::fs::remove_dir_all(pitr_path);
-    
+
     DatabaseOps::restore_to_transaction(backup_path, pitr_path, 1).await?;
     println!("   ✓ Restored to transaction 1 (before transactions 2 and 3)");
 
     let pitr_db = DatabaseOps::open(pitr_path).await?;
     let _pitr_results = pitr_db.query("SELECT COUNT(*) FROM data").await?;
     println!("   ✓ PITR database: 3 transactions (only txn 1 data)");
-    
+
     let _pitr_data = pitr_db.query("SELECT * FROM data").await?;
     println!("   ✓ Verified data consistency at point-in-time");
 
@@ -143,7 +147,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("     Schema Valid: {}", verification.schema_valid);
     println!("     Files Verified: {}", verification.files_verified);
     println!("     Total Size: {} bytes", verification.total_size_bytes);
-    
+
     if verification.schema_valid && verification.files_verified > 0 {
         println!("   ✓ Backup integrity verified");
     }
@@ -178,4 +182,3 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
-

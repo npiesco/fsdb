@@ -6,11 +6,10 @@
 //! - Audit logging
 //! - Permission enforcement
 
+pub mod audit;
 pub mod auth;
 pub mod rbac;
-pub mod audit;
 
-pub use auth::{User, UserStore, Credentials, AuthContext};
-pub use rbac::{Role, Permission, RoleManager};
-pub use audit::{AuditLog, AuditEntry, AuditLogger};
-
+pub use audit::{AuditEntry, AuditLog, AuditLogger};
+pub use auth::{AuthContext, Credentials, User, UserStore};
+pub use rbac::{Permission, Role, RoleManager};

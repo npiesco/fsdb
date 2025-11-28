@@ -14,7 +14,7 @@ use nfsserve::{
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use tracing::{info, error, debug};
+use tracing::{debug, error, info};
 
 /// Metadata for created files including stable timestamps
 #[derive(Clone, Debug)]
@@ -67,7 +67,7 @@ impl FsdbFilesystem {
             attr_cache: Arc::new(AttrCache::new()),
         }
     }
-    
+
     /// Create a new filesystem with caching enabled
     pub fn with_cache(db: Arc<DatabaseOps>, cache: Arc<NfsCache>) -> Self {
         Self {
@@ -81,7 +81,7 @@ impl FsdbFilesystem {
             attr_cache: Arc::new(AttrCache::new()),
         }
     }
-    
+
     /// Get current timestamp for file attributes
     fn now() -> nfstime3 {
         let now = std::time::SystemTime::now()
@@ -92,7 +92,7 @@ impl FsdbFilesystem {
             nseconds: now.subsec_nanos(),
         }
     }
-    
+
     /// Create directory attributes
     fn dir_attr(id: fileid3) -> fattr3 {
         let now = Self::now();
@@ -112,7 +112,7 @@ impl FsdbFilesystem {
             ctime: now,
         }
     }
-    
+
     /// Create file attributes
     fn file_attr(id: fileid3, size: u64) -> fattr3 {
         let now = Self::now();
@@ -132,38 +132,41 @@ impl FsdbFilesystem {
             ctime: now,
         }
     }
-    
+
     /// Refresh Parquet file cache (Delta Lake mode)
     pub(crate) async fn refresh_parquet_files(&self) -> std::result::Result<(), nfsstat3> {
         // For Delta Lake, scan the base directory for parquet files
         // Delta Lake stores parquet files in the root table directory
         let mut parquet_files = self.parquet_files.lock().await;
         parquet_files.clear();
-        
+
         let base_path = self.db.base_path();
-        
+
         // Scan for .parquet files in the base directory
         match std::fs::read_dir(base_path) {
             Ok(entries) => {
                 let mut file_id = PARQUET_FILE_ID_START;
-                
-                for entry in entries {
-                    if let Ok(entry) = entry {
-                        let path = entry.path();
-                        
-                        // Check if it's a parquet file
-                        if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("parquet") {
-                            if let Some(filename) = path.file_name() {
-                                let filename_str = filename.to_string_lossy().to_string();
-                                parquet_files.insert(file_id, filename_str);
-                                file_id += 1;
-                            }
+
+                for entry in entries.flatten() {
+                    let path = entry.path();
+
+                    // Check if it's a parquet file
+                    if path.is_file()
+                        && path.extension().and_then(|s| s.to_str()) == Some("parquet")
+                    {
+                        if let Some(filename) = path.file_name() {
+                            let filename_str = filename.to_string_lossy().to_string();
+                            parquet_files.insert(file_id, filename_str);
+                            file_id += 1;
                         }
                     }
                 }
-                
-                info!("NFS: Found {} parquet files in Delta Lake table", parquet_files.len());
-        Ok(())
+
+                info!(
+                    "NFS: Found {} parquet files in Delta Lake table",
+                    parquet_files.len()
+                );
+                Ok(())
             }
             Err(e) => {
                 error!("Failed to read Delta Lake directory: {}", e);
@@ -178,15 +181,19 @@ impl NFSFileSystem for FsdbFilesystem {
     fn root_dir(&self) -> fileid3 {
         ROOT_ID
     }
-    
+
     fn capabilities(&self) -> VFSCapabilities {
         VFSCapabilities::ReadWrite
     }
-    
-    async fn lookup(&self, dirid: fileid3, filename: &filename3) -> std::result::Result<fileid3, nfsstat3> {
+
+    async fn lookup(
+        &self,
+        dirid: fileid3,
+        filename: &filename3,
+    ) -> std::result::Result<fileid3, nfsstat3> {
         let name = String::from_utf8_lossy(filename.as_ref());
         info!("NFS LOOKUP: dir={}, filename={}", dirid, name);
-        
+
         match dirid {
             ROOT_ID => {
                 if name == "data" {
@@ -222,11 +229,11 @@ impl NFSFileSystem for FsdbFilesystem {
                         return Ok(metadata.file_id);
                     }
                     drop(created_files);
-                    
+
                     // Check Parquet files
                     self.refresh_parquet_files().await?;
                     let parquet_files = self.parquet_files.lock().await;
-                    
+
                     for (id, path) in parquet_files.iter() {
                         let basename = std::path::Path::new(path)
                             .file_name()
@@ -236,7 +243,7 @@ impl NFSFileSystem for FsdbFilesystem {
                             return Ok(*id);
                         }
                     }
-                    
+
                     Err(nfsstat3::NFS3ERR_NOENT)
                 }
             }
@@ -262,15 +269,15 @@ impl NFSFileSystem for FsdbFilesystem {
             _ => Err(nfsstat3::NFS3ERR_NOTDIR),
         }
     }
-    
+
     async fn getattr(&self, id: fileid3) -> std::result::Result<fattr3, nfsstat3> {
         info!("NFS GETATTR: id={}", id);
-        
+
         // Check attribute cache first
         if let Some(cached_attr) = self.attr_cache.get(id).await {
             return Ok(cached_attr);
         }
-        
+
         // Cache miss - compute attributes
         let attr = match id {
             ROOT_ID => Self::dir_attr(ROOT_ID),
@@ -299,7 +306,7 @@ impl NFSFileSystem for FsdbFilesystem {
                 };
                 Self::file_attr(DATA_CSV_ID, size)
             }
-            id if id >= PARQUET_FILE_ID_START && id < CREATED_DIR_START => {
+            id if (PARQUET_FILE_ID_START..CREATED_DIR_START).contains(&id) => {
                 // Parquet file (Delta Lake mode)
                 let parquet_files = self.parquet_files.lock().await;
                 if let Some(file_path) = parquet_files.get(&id) {
@@ -343,16 +350,16 @@ impl NFSFileSystem for FsdbFilesystem {
             }
             _ => return Err(nfsstat3::NFS3ERR_NOENT),
         };
-        
+
         // Store in cache
         self.attr_cache.set(id, attr).await;
-        
+
         Ok(attr)
     }
-    
+
     async fn setattr(&self, id: fileid3, setattr: sattr3) -> std::result::Result<fattr3, nfsstat3> {
         info!("NFS SETATTR: id={}, setattr={:?}", id, setattr);
-        
+
         // For created files, acknowledge setattr but preserve stable timestamps
         if id >= CREATED_FILE_START {
             let created_files = self.created_files.lock().await;
@@ -361,7 +368,7 @@ impl NFSFileSystem for FsdbFilesystem {
                 // Return current attributes with stable timestamps
                 let attr = fattr3 {
                     ftype: ftype3::NF3REG,
-                    mode: 0o644,  // Ignore mode changes for simplicity
+                    mode: 0o644, // Ignore mode changes for simplicity
                     nlink: 1,
                     uid: 1000,
                     gid: 1000,
@@ -375,23 +382,28 @@ impl NFSFileSystem for FsdbFilesystem {
                     ctime: metadata.ctime,
                 };
                 drop(created_files);
-                
+
                 // Update cache with stable attributes
                 self.attr_cache.set(id, attr).await;
-                
+
                 info!("SETATTR succeeded for file ID {}", id);
                 return Ok(attr);
             }
         }
-        
+
         // For other files (data.csv, directories), not supported
         info!("SETATTR not supported for ID {}", id);
         Err(nfsstat3::NFS3ERR_NOTSUPP)
     }
-    
-    async fn read(&self, id: fileid3, offset: u64, count: u32) -> std::result::Result<(Vec<u8>, bool), nfsstat3> {
+
+    async fn read(
+        &self,
+        id: fileid3,
+        offset: u64,
+        count: u32,
+    ) -> std::result::Result<(Vec<u8>, bool), nfsstat3> {
         info!("NFS READ: id={}, offset={}, count={}", id, offset, count);
-        
+
         match id {
             DATA_CSV_ID => {
                 // Try cache first if enabled
@@ -405,16 +417,16 @@ impl NFSFileSystem for FsdbFilesystem {
                         return Ok((data, eof));
                     }
                 }
-                
+
                 // Cache miss or no cache - generate content without holding lock
                 let db = self.db.clone();
                 let view = CsvFileView::new(db);
-                
+
                 let data = view.read(offset, count).await.map_err(|e| {
                     error!("Read error: {}", e);
                     nfsstat3::NFS3ERR_IO
                 })?;
-                
+
                 // Store in cache if enabled (only on first read, offset==0)
                 if offset == 0 {
                     if let Some(ref cache) = self.cache {
@@ -423,7 +435,7 @@ impl NFSFileSystem for FsdbFilesystem {
                         }
                     }
                 }
-                
+
                 let size = view.size().await.unwrap_or(0);
                 let eof = offset + data.len() as u64 >= size;
                 Ok((data, eof))
@@ -448,16 +460,17 @@ impl NFSFileSystem for FsdbFilesystem {
                     Err(nfsstat3::NFS3ERR_NOENT)
                 }
             }
-            id if id >= PARQUET_FILE_ID_START && id < CREATED_DIR_START => {
+            id if (PARQUET_FILE_ID_START..CREATED_DIR_START).contains(&id) => {
                 // Read individual Parquet file as CSV
                 let file_path = {
-                let parquet_files = self.parquet_files.lock().await;
-                    parquet_files.get(&id)
+                    let parquet_files = self.parquet_files.lock().await;
+                    parquet_files
+                        .get(&id)
                         .ok_or(nfsstat3::NFS3ERR_NOENT)?
                         .clone()
                 };
                 let cache_key = format!("csv:file:{}", file_path);
-                
+
                 // Try cache first if enabled
                 if let Some(ref cache) = self.cache {
                     if let Ok(Some(cached_content)) = cache.get(&cache_key).await {
@@ -469,14 +482,14 @@ impl NFSFileSystem for FsdbFilesystem {
                         return Ok((data, eof));
                     }
                 }
-                
+
                 // Cache miss - generate content
                 let file_view = CsvFileView::new_for_file(self.db.clone(), file_path.clone());
                 let data = file_view.read(offset, count).await.map_err(|e| {
                     error!("Read error for Parquet file: {}", e);
                     nfsstat3::NFS3ERR_IO
                 })?;
-                
+
                 // Store in cache if enabled (only on first read)
                 if offset == 0 {
                     if let Some(ref cache) = self.cache {
@@ -485,7 +498,7 @@ impl NFSFileSystem for FsdbFilesystem {
                         }
                     }
                 }
-                
+
                 let size = file_view.size().await.unwrap_or(0);
                 let eof = offset + data.len() as u64 >= size;
                 Ok((data, eof))
@@ -493,10 +506,15 @@ impl NFSFileSystem for FsdbFilesystem {
             _ => Err(nfsstat3::NFS3ERR_ISDIR),
         }
     }
-    
-    async fn write(&self, id: fileid3, _offset: u64, data: &[u8]) -> std::result::Result<fattr3, nfsstat3> {
+
+    async fn write(
+        &self,
+        id: fileid3,
+        _offset: u64,
+        data: &[u8],
+    ) -> std::result::Result<fattr3, nfsstat3> {
         info!("NFS WRITE: id={}, data_len={}", id, data.len());
-        
+
         match id {
             DATA_CSV_ID => {
                 // Fetch cached content BEFORE invalidating (for performance)
@@ -514,16 +532,16 @@ impl NFSFileSystem for FsdbFilesystem {
                 } else {
                     None
                 };
-                
+
                 // Don't hold lock across await - create temporary view
                 let db = self.db.clone();
                 let view = CsvFileView::new(db);
-                
+
                 view.apply_write(data, cached_content).await.map_err(|e| {
                     error!("Write error: {}", e);
                     nfsstat3::NFS3ERR_IO
                 })?;
-                
+
                 // UPDATE content cache after write (don't invalidate!)
                 // This keeps subsequent reads fast by avoiding CSV regeneration
                 if let Some(ref cache) = self.cache {
@@ -533,23 +551,29 @@ impl NFSFileSystem for FsdbFilesystem {
                         nfsstat3::NFS3ERR_IO
                     })?;
                     let fresh_size = fresh_csv.len();
-                    
+
                     // Update cache with new content
                     if let Err(e) = cache.insert("csv:data".to_string(), fresh_csv).await {
                         error!("Failed to update cache after write: {}", e);
                         // Don't fail the write if cache update fails
                     } else {
-                        info!("Content cache UPDATED for data.csv after write ({} bytes)", fresh_size);
+                        info!(
+                            "Content cache UPDATED for data.csv after write ({} bytes)",
+                            fresh_size
+                        );
                     }
                 }
-                
+
                 // IMPORTANT: Update attr_cache with NEW file size after write
                 // We must return accurate file size or OS NFS clients will truncate reads!
                 let size = view.size().await.unwrap_or(0);
                 let attr = Self::file_attr(DATA_CSV_ID, size);
                 self.attr_cache.set(DATA_CSV_ID, attr).await;
-                info!("Write completed, attr cache updated with new size: {} bytes", size);
-                
+                info!(
+                    "Write completed, attr cache updated with new size: {} bytes",
+                    size
+                );
+
                 Ok(attr)
             }
             id if id >= CREATED_FILE_START => {
@@ -559,10 +583,10 @@ impl NFSFileSystem for FsdbFilesystem {
                     // Replace content
                     metadata.content = data.to_vec();
                     let size = metadata.content.len() as u64;
-                    
+
                     // Update mtime only (preserve atime and ctime for stability)
                     metadata.mtime = Self::now();
-                    
+
                     // Create attributes with stable timestamps
                     let attr = fattr3 {
                         ftype: ftype3::NF3REG,
@@ -580,11 +604,14 @@ impl NFSFileSystem for FsdbFilesystem {
                         ctime: metadata.ctime,
                     };
                     drop(created_files);
-                    
+
                     // Update attributes cache
                     self.attr_cache.set(id, attr).await;
-                    
-                    info!("Write completed to created file ID {}, size: {} bytes", id, size);
+
+                    info!(
+                        "Write completed to created file ID {}, size: {} bytes",
+                        id, size
+                    );
                     Ok(attr)
                 } else {
                     Err(nfsstat3::NFS3ERR_NOENT)
@@ -593,23 +620,28 @@ impl NFSFileSystem for FsdbFilesystem {
             _ => Err(nfsstat3::NFS3ERR_ROFS),
         }
     }
-    
-    async fn create(&self, dirid: fileid3, filename: &filename3, _attr: sattr3) -> std::result::Result<(fileid3, fattr3), nfsstat3> {
+
+    async fn create(
+        &self,
+        dirid: fileid3,
+        filename: &filename3,
+        _attr: sattr3,
+    ) -> std::result::Result<(fileid3, fattr3), nfsstat3> {
         let name = String::from_utf8_lossy(filename.as_ref());
         info!("NFS CREATE: dir={}, filename={}", dirid, name);
-        
+
         // Only allow creating files in root, data directory, or created directories
         if dirid != ROOT_ID && dirid != DATA_DIR_ID && dirid < CREATED_DIR_START {
             error!("create not allowed in directory {}", dirid);
             return Err(nfsstat3::NFS3ERR_NOTDIR);
         }
-        
+
         // Don't allow creating data.csv (it's special)
         if dirid == DATA_DIR_ID && name == "data.csv" {
             error!("Cannot create data.csv - it's a special file");
             return Err(nfsstat3::NFS3ERR_EXIST);
         }
-        
+
         // Check if file already exists
         let created_files = self.created_files.lock().await;
         let key = (dirid, name.to_string());
@@ -618,13 +650,13 @@ impl NFSFileSystem for FsdbFilesystem {
             return Err(nfsstat3::NFS3ERR_EXIST);
         }
         drop(created_files);
-        
+
         // Allocate new file ID
         let mut next_id = self.next_file_id.lock().await;
         let new_file_id = *next_id;
         *next_id += 1;
         drop(next_id);
-        
+
         // Create stable timestamps for the new file
         let now = Self::now();
         let metadata = FileMetadata {
@@ -634,12 +666,12 @@ impl NFSFileSystem for FsdbFilesystem {
             mtime: now,
             ctime: now,
         };
-        
+
         // Register the new file with metadata
         let mut created_files = self.created_files.lock().await;
         created_files.insert((dirid, name.to_string()), metadata.clone());
         drop(created_files);
-        
+
         // Create file attributes using stored timestamps
         let attr = fattr3 {
             ftype: ftype3::NF3REG,
@@ -656,28 +688,39 @@ impl NFSFileSystem for FsdbFilesystem {
             mtime: metadata.mtime,
             ctime: metadata.ctime,
         };
-        
+
         // Cache attributes
         self.attr_cache.set(new_file_id, attr).await;
-        
-        info!("Created file {} with ID {} in parent {}", name, new_file_id, dirid);
+
+        info!(
+            "Created file {} with ID {} in parent {}",
+            name, new_file_id, dirid
+        );
         Ok((new_file_id, attr))
     }
-    
-    async fn create_exclusive(&self, _dirid: fileid3, _filename: &filename3) -> std::result::Result<fileid3, nfsstat3> {
+
+    async fn create_exclusive(
+        &self,
+        _dirid: fileid3,
+        _filename: &filename3,
+    ) -> std::result::Result<fileid3, nfsstat3> {
         Err(nfsstat3::NFS3ERR_NOTSUPP)
     }
-    
-    async fn mkdir(&self, dirid: fileid3, dirname: &filename3) -> std::result::Result<(fileid3, fattr3), nfsstat3> {
+
+    async fn mkdir(
+        &self,
+        dirid: fileid3,
+        dirname: &filename3,
+    ) -> std::result::Result<(fileid3, fattr3), nfsstat3> {
         let name = String::from_utf8_lossy(dirname.as_ref());
         info!("NFS MKDIR: dir={}, dirname={}", dirid, name);
-        
+
         // Only allow creating directories in root or data directory
         if dirid != ROOT_ID && dirid != DATA_DIR_ID {
             error!("mkdir not allowed in directory {}", dirid);
             return Err(nfsstat3::NFS3ERR_NOTDIR);
         }
-        
+
         // Check if directory already exists
         let created_dirs = self.created_dirs.lock().await;
         let key = (dirid, name.to_string());
@@ -686,49 +729,56 @@ impl NFSFileSystem for FsdbFilesystem {
             return Err(nfsstat3::NFS3ERR_EXIST);
         }
         drop(created_dirs);
-        
+
         // Allocate new directory ID
         let mut next_id = self.next_dir_id.lock().await;
         let new_dir_id = *next_id;
         *next_id += 1;
         drop(next_id);
-        
+
         // Register the new directory
         let mut created_dirs = self.created_dirs.lock().await;
         created_dirs.insert((dirid, name.to_string()), new_dir_id);
         drop(created_dirs);
-        
+
         // Create directory attributes
         let attr = Self::dir_attr(new_dir_id);
-        
+
         // Cache attributes
         self.attr_cache.set(new_dir_id, attr).await;
-        
-        info!("Created directory {} with ID {} in parent {}", name, new_dir_id, dirid);
+
+        info!(
+            "Created directory {} with ID {} in parent {}",
+            name, new_dir_id, dirid
+        );
         Ok((new_dir_id, attr))
     }
-    
-    async fn remove(&self, dirid: fileid3, filename: &filename3) -> std::result::Result<(), nfsstat3> {
+
+    async fn remove(
+        &self,
+        dirid: fileid3,
+        filename: &filename3,
+    ) -> std::result::Result<(), nfsstat3> {
         let filename_str = String::from_utf8_lossy(filename);
         info!("NFS REMOVE: dir={}, file={}", dirid, filename_str);
-        
+
         // Only support deletion of data.csv from /data directory (truncate table)
         if dirid == DATA_DIR_ID && filename_str == "data.csv" {
             info!("Deleting data.csv - truncating table");
-            
+
             // Delete all rows using deletion vectors (efficient, no rewrite)
             let db = self.db.clone();
             db.delete_rows_where("1=1").await.map_err(|e| {
                 error!("Failed to truncate table: {}", e);
                 nfsstat3::NFS3ERR_IO
             })?;
-            
+
             // Invalidate cache after deletion
             if let Some(ref cache) = self.cache {
                 let _ = cache.remove("csv:data").await;
                 info!("Content cache invalidated for data.csv after deletion");
             }
-            
+
             info!("Table truncated successfully");
             Ok(())
         } else {
@@ -737,16 +787,30 @@ impl NFSFileSystem for FsdbFilesystem {
             Err(nfsstat3::NFS3ERR_NOTSUPP)
         }
     }
-    
-    async fn rename(&self, _from_dirid: fileid3, _from_filename: &filename3, _to_dirid: fileid3, _to_filename: &filename3) -> std::result::Result<(), nfsstat3> {
+
+    async fn rename(
+        &self,
+        _from_dirid: fileid3,
+        _from_filename: &filename3,
+        _to_dirid: fileid3,
+        _to_filename: &filename3,
+    ) -> std::result::Result<(), nfsstat3> {
         Err(nfsstat3::NFS3ERR_NOTSUPP)
     }
-    
-    async fn readdir(&self, dirid: fileid3, start_after: fileid3, max_entries: usize) -> std::result::Result<ReadDirResult, nfsstat3> {
-        info!("NFS READDIR: dir={}, start_after={}, max={}", dirid, start_after, max_entries);
-        
+
+    async fn readdir(
+        &self,
+        dirid: fileid3,
+        start_after: fileid3,
+        max_entries: usize,
+    ) -> std::result::Result<ReadDirResult, nfsstat3> {
+        info!(
+            "NFS READDIR: dir={}, start_after={}, max={}",
+            dirid, start_after, max_entries
+        );
+
         let mut entries = Vec::new();
-        
+
         match dirid {
             ROOT_ID => {
                 if start_after < DATA_DIR_ID {
@@ -759,7 +823,8 @@ impl NFSFileSystem for FsdbFilesystem {
                 // Add created directories in root
                 let created_dirs = self.created_dirs.lock().await;
                 for ((parent_id, dir_name), &dir_id) in created_dirs.iter() {
-                    if *parent_id == ROOT_ID && dir_id > start_after && entries.len() < max_entries {
+                    if *parent_id == ROOT_ID && dir_id > start_after && entries.len() < max_entries
+                    {
                         entries.push(DirEntry {
                             fileid: dir_id,
                             name: dir_name.as_bytes().into(),
@@ -771,7 +836,10 @@ impl NFSFileSystem for FsdbFilesystem {
                 // Add created files in root
                 let created_files = self.created_files.lock().await;
                 for ((parent_id, file_name), metadata) in created_files.iter() {
-                    if *parent_id == ROOT_ID && metadata.file_id > start_after && entries.len() < max_entries {
+                    if *parent_id == ROOT_ID
+                        && metadata.file_id > start_after
+                        && entries.len() < max_entries
+                    {
                         entries.push(DirEntry {
                             fileid: metadata.file_id,
                             name: file_name.as_bytes().into(),
@@ -812,11 +880,11 @@ impl NFSFileSystem for FsdbFilesystem {
                         attr: Self::file_attr(DATA_CSV_ID, size),
                     });
                 }
-                
+
                 // Add Parquet files (Delta Lake mode)
                 self.refresh_parquet_files().await?;
                 let parquet_files = self.parquet_files.lock().await;
-                
+
                 for (id, file_path) in parquet_files.iter() {
                     if *id > start_after && entries.len() < max_entries {
                         let basename = std::path::Path::new(file_path)
@@ -825,13 +893,13 @@ impl NFSFileSystem for FsdbFilesystem {
                             .unwrap_or(file_path)
                             .as_bytes()
                             .into();
-                        
+
                         // Get real file size from filesystem
                         let full_path = self.db.base_path().join(file_path);
                         let size = std::fs::metadata(&full_path)
                             .map(|m| m.len())
                             .unwrap_or(1024); // Fallback to 1024 if not found
-                        
+
                         entries.push(DirEntry {
                             fileid: *id,
                             name: basename,
@@ -839,11 +907,14 @@ impl NFSFileSystem for FsdbFilesystem {
                         });
                     }
                 }
-                
+
                 // Add created directories in /data
                 let created_dirs = self.created_dirs.lock().await;
                 for ((parent_id, dir_name), &dir_id) in created_dirs.iter() {
-                    if *parent_id == DATA_DIR_ID && dir_id > start_after && entries.len() < max_entries {
+                    if *parent_id == DATA_DIR_ID
+                        && dir_id > start_after
+                        && entries.len() < max_entries
+                    {
                         entries.push(DirEntry {
                             fileid: dir_id,
                             name: dir_name.as_bytes().into(),
@@ -855,7 +926,10 @@ impl NFSFileSystem for FsdbFilesystem {
                 // Add created files in /data
                 let created_files = self.created_files.lock().await;
                 for ((parent_id, file_name), metadata) in created_files.iter() {
-                    if *parent_id == DATA_DIR_ID && metadata.file_id > start_after && entries.len() < max_entries {
+                    if *parent_id == DATA_DIR_ID
+                        && metadata.file_id > start_after
+                        && entries.len() < max_entries
+                    {
                         entries.push(DirEntry {
                             fileid: metadata.file_id,
                             name: file_name.as_bytes().into(),
@@ -894,7 +968,10 @@ impl NFSFileSystem for FsdbFilesystem {
                 // Add created files in this directory
                 let created_files = self.created_files.lock().await;
                 for ((parent_id, file_name), metadata) in created_files.iter() {
-                    if *parent_id == id && metadata.file_id > start_after && entries.len() < max_entries {
+                    if *parent_id == id
+                        && metadata.file_id > start_after
+                        && entries.len() < max_entries
+                    {
                         entries.push(DirEntry {
                             fileid: metadata.file_id,
                             name: file_name.as_bytes().into(),
@@ -919,20 +996,24 @@ impl NFSFileSystem for FsdbFilesystem {
             }
             _ => return Err(nfsstat3::NFS3ERR_NOTDIR),
         }
-        
-        Ok(ReadDirResult {
-            entries,
-            end: true,
-        })
+
+        Ok(ReadDirResult { entries, end: true })
     }
-    
-    async fn symlink(&self, _dirid: fileid3, _linkname: &filename3, _symlink_data: &nfsserve::nfs::nfspath3, _attr: &sattr3) -> std::result::Result<(fileid3, fattr3), nfsstat3> {
+
+    async fn symlink(
+        &self,
+        _dirid: fileid3,
+        _linkname: &filename3,
+        _symlink_data: &nfsserve::nfs::nfspath3,
+        _attr: &sattr3,
+    ) -> std::result::Result<(fileid3, fattr3), nfsstat3> {
         Err(nfsstat3::NFS3ERR_NOTSUPP)
     }
-    
-    async fn readlink(&self, _id: fileid3) -> std::result::Result<nfsserve::nfs::nfspath3, nfsstat3> {
+
+    async fn readlink(
+        &self,
+        _id: fileid3,
+    ) -> std::result::Result<nfsserve::nfs::nfspath3, nfsstat3> {
         Err(nfsstat3::NFS3ERR_NOTSUPP)
     }
 }
-
-

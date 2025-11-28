@@ -7,12 +7,12 @@
 //! - Column statistics and metadata
 //! - Filename convention: data_<timestamp>_<txn_id>.parquet
 
+use crate::Result;
 use arrow::array::{RecordBatch, RecordBatchReader};
 use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 use parquet::arrow::ArrowWriter;
 use parquet::basic::{Compression, Encoding};
 use parquet::file::properties::WriterProperties;
-use crate::Result;
 use std::fs::File;
 use std::path::Path;
 use tracing::{debug, info};
@@ -41,18 +41,14 @@ impl ParquetWriter {
             .set_encoding(Encoding::PLAIN)
             .set_dictionary_enabled(true)
             .set_statistics_enabled(parquet::file::properties::EnabledStatistics::Page)
-            .set_max_row_group_size(1024 * 1024)  // 1M rows per row group
+            .set_max_row_group_size(1024 * 1024) // 1M rows per row group
             .build();
 
         Self { properties }
     }
 
     /// Write a RecordBatch to a Parquet file
-    pub fn write_batch<P: AsRef<Path>>(
-        &self,
-        path: P,
-        batch: &RecordBatch,
-    ) -> Result<()> {
+    pub fn write_batch<P: AsRef<Path>>(&self, path: P, batch: &RecordBatch) -> Result<()> {
         let path = path.as_ref();
         debug!(
             "Writing RecordBatch to Parquet: {} ({} rows, {} columns)",
@@ -65,11 +61,7 @@ impl ParquetWriter {
         let file = File::create(path)?;
 
         // Create Arrow writer with our properties
-        let mut writer = ArrowWriter::try_new(
-            file,
-            batch.schema(),
-            Some(self.properties.clone()),
-        )?;
+        let mut writer = ArrowWriter::try_new(file, batch.schema(), Some(self.properties.clone()))?;
 
         // Write the batch
         writer.write(batch)?;
@@ -133,7 +125,7 @@ impl ParquetReader {
 
         // Read all batches and concatenate them
         let mut batches = Vec::new();
-        while let Some(batch) = reader.next() {
+        for batch in reader.by_ref() {
             batches.push(batch?);
         }
 
@@ -185,11 +177,13 @@ mod tests {
         ]));
 
         let id_array = Arc::new(Int32Array::from(vec![1, 2, 3, 4, 5]));
-        let name_array = Arc::new(StringArray::from(vec!["Alice", "Bob", "Charlie", "Diana", "Eve"]));
+        let name_array = Arc::new(StringArray::from(vec![
+            "Alice", "Bob", "Charlie", "Diana", "Eve",
+        ]));
         let score_array = Arc::new(Float64Array::from(vec![
             Some(95.5),
             Some(87.3),
-            None,  // NULL value
+            None, // NULL value
             Some(92.1),
             Some(88.8),
         ]));
@@ -274,7 +268,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("test_nulls.parquet");
 
-        let batch = create_test_batch();  // Contains NULL in score column
+        let batch = create_test_batch(); // Contains NULL in score column
 
         let writer = ParquetWriter::new();
         writer
@@ -344,7 +338,11 @@ mod tests {
         let schema = batch1.schema();
         let id_array = Arc::new(Int32Array::from(vec![10, 20, 30]));
         let name_array = Arc::new(StringArray::from(vec!["X", "Y", "Z"]));
-        let score_array = Arc::new(Float64Array::from(vec![Some(100.0), Some(200.0), Some(300.0)]));
+        let score_array = Arc::new(Float64Array::from(vec![
+            Some(100.0),
+            Some(200.0),
+            Some(300.0),
+        ]));
         let active_array = Arc::new(BooleanArray::from(vec![false, false, true]));
 
         let batch2 = RecordBatch::try_new(
@@ -366,4 +364,3 @@ mod tests {
         assert_eq!(read1.schema(), read2.schema());
     }
 }
-

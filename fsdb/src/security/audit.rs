@@ -38,6 +38,12 @@ pub struct AuditLog {
     entries: Vec<AuditEntry>,
 }
 
+impl Default for AuditLog {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AuditLog {
     /// Create a new empty audit log
     pub fn new() -> Self {
@@ -61,19 +67,19 @@ impl AuditLog {
     /// Save audit log to disk
     pub fn save<P: AsRef<Path>>(&self, path: P) -> Result<()> {
         let path = path.as_ref();
-        
+
         // Ensure parent directory exists
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
         }
 
         let json = serde_json::to_string_pretty(self)?;
-        
+
         // Atomic write: .tmp → rename
         let tmp_path = path.with_extension("tmp");
         std::fs::write(&tmp_path, json)?;
         std::fs::rename(tmp_path, path)?;
-        
+
         Ok(())
     }
 
@@ -125,9 +131,15 @@ impl AuditLogger {
     }
 
     /// Log an operation
-    pub async fn log(&self, user: String, operation: String, details: String, success: bool) -> Result<()> {
+    pub async fn log(
+        &self,
+        user: String,
+        operation: String,
+        details: String,
+        success: bool,
+    ) -> Result<()> {
         let entry = AuditEntry::new(user, operation, details, success);
-        
+
         let mut log = self.log.lock().await;
         log.add_entry(entry);
         log.save(&self.log_path)?;
@@ -178,4 +190,3 @@ mod tests {
         assert_eq!(select_entries[0].user, "bob");
     }
 }
-

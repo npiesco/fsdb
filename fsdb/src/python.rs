@@ -22,43 +22,43 @@ use std::sync::Arc;
 pub enum FsdbError {
     #[error("IO error: {message}")]
     IoError { message: String },
-    
+
     #[error("Serialization error: {message}")]
     SerializationError { message: String },
-    
+
     #[error("ObjectStore error: {message}")]
     ObjectStoreError { message: String },
-    
+
     #[error("Arrow error: {message}")]
     ArrowError { message: String },
-    
+
     #[error("Parquet error: {message}")]
     ParquetError { message: String },
-    
+
     #[error("Database not found: {message}")]
     DatabaseNotFound { message: String },
-    
+
     #[error("Record not found: {message}")]
     RecordNotFound { message: String },
-    
+
     #[error("Database already exists: {message}")]
     DatabaseAlreadyExists { message: String },
-    
+
     #[error("Invalid operation: {message}")]
     InvalidOperation { message: String },
-    
+
     #[error("Transaction conflict: {message}")]
     TransactionConflict { message: String },
-    
+
     #[error("WAL error: {message}")]
     WalError { message: String },
-    
+
     #[error("Bincode error: {message}")]
     BincodeError { message: String },
-    
+
     #[error("Delta Lake error: {message}")]
     DeltaLakeError { message: String },
-    
+
     #[error("{message}")]
     Other { message: String },
 }
@@ -66,19 +66,33 @@ pub enum FsdbError {
 impl From<CoreError> for FsdbError {
     fn from(err: CoreError) -> Self {
         match err {
-            CoreError::Io(e) => FsdbError::IoError { message: e.to_string() },
-            CoreError::Serialization(e) => FsdbError::SerializationError { message: e.to_string() },
-            CoreError::ObjectStore(e) => FsdbError::ObjectStoreError { message: e.to_string() },
-            CoreError::Arrow(e) => FsdbError::ArrowError { message: e.to_string() },
-            CoreError::Parquet(e) => FsdbError::ParquetError { message: e.to_string() },
+            CoreError::Io(e) => FsdbError::IoError {
+                message: e.to_string(),
+            },
+            CoreError::Serialization(e) => FsdbError::SerializationError {
+                message: e.to_string(),
+            },
+            CoreError::ObjectStore(e) => FsdbError::ObjectStoreError {
+                message: e.to_string(),
+            },
+            CoreError::Arrow(e) => FsdbError::ArrowError {
+                message: e.to_string(),
+            },
+            CoreError::Parquet(e) => FsdbError::ParquetError {
+                message: e.to_string(),
+            },
             CoreError::DatabaseNotFound(msg) => FsdbError::DatabaseNotFound { message: msg },
             CoreError::RecordNotFound(msg) => FsdbError::RecordNotFound { message: msg },
-            CoreError::DatabaseAlreadyExists(msg) => FsdbError::DatabaseAlreadyExists { message: msg },
+            CoreError::DatabaseAlreadyExists(msg) => {
+                FsdbError::DatabaseAlreadyExists { message: msg }
+            }
             CoreError::InvalidOperation(msg) => FsdbError::InvalidOperation { message: msg },
             CoreError::TransactionConflict(msg) => FsdbError::TransactionConflict { message: msg },
             CoreError::Wal(msg) => FsdbError::WalError { message: msg },
             CoreError::Bincode(msg) => FsdbError::BincodeError { message: msg },
-            CoreError::DeltaTable(e) => FsdbError::DeltaLakeError { message: e.to_string() },
+            CoreError::DeltaTable(e) => FsdbError::DeltaLakeError {
+                message: e.to_string(),
+            },
             CoreError::Other(msg) => FsdbError::Other { message: msg },
         }
     }
@@ -122,7 +136,9 @@ impl Schema {
                     "LargeBinary" => DataType::LargeBinary,
                     "Date32" => DataType::Date32,
                     "Date64" => DataType::Date64,
-                    "Timestamp" => DataType::Timestamp(arrow::datatypes::TimeUnit::Microsecond, None),
+                    "Timestamp" => {
+                        DataType::Timestamp(arrow::datatypes::TimeUnit::Microsecond, None)
+                    }
                     _ => {
                         return Err(FsdbError::InvalidOperation {
                             message: format!("Unsupported data type: {}", f.data_type),
@@ -235,8 +251,9 @@ impl DatabaseOps {
     pub fn create(path: String, schema: Schema) -> Result<Arc<Self>, FsdbError> {
         let arrow_schema = schema.to_arrow_schema()?;
         let runtime = Arc::new(
-            tokio::runtime::Runtime::new()
-                .map_err(|e| FsdbError::Other { message: e.to_string() })?
+            tokio::runtime::Runtime::new().map_err(|e| FsdbError::Other {
+                message: e.to_string(),
+            })?,
         );
         let db = runtime.block_on(CoreDatabaseOps::create(&path, arrow_schema))?;
         Ok(Arc::new(Self {
@@ -254,10 +271,15 @@ impl DatabaseOps {
     ) -> Result<Arc<Self>, FsdbError> {
         let arrow_schema = schema.to_arrow_schema()?;
         let runtime = Arc::new(
-            tokio::runtime::Runtime::new()
-                .map_err(|e| FsdbError::Other { message: e.to_string() })?
+            tokio::runtime::Runtime::new().map_err(|e| FsdbError::Other {
+                message: e.to_string(),
+            })?,
         );
-        let db = runtime.block_on(CoreDatabaseOps::create_with_auth(&path, arrow_schema, auth_enabled))?;
+        let db = runtime.block_on(CoreDatabaseOps::create_with_auth(
+            &path,
+            arrow_schema,
+            auth_enabled,
+        ))?;
         Ok(Arc::new(Self {
             inner: Arc::new(db),
             runtime,
@@ -273,8 +295,9 @@ impl DatabaseOps {
     ) -> Result<Arc<Self>, FsdbError> {
         let arrow_schema = schema.to_arrow_schema()?;
         let runtime = Arc::new(
-            tokio::runtime::Runtime::new()
-                .map_err(|e| FsdbError::Other { message: e.to_string() })?
+            tokio::runtime::Runtime::new().map_err(|e| FsdbError::Other {
+                message: e.to_string(),
+            })?,
         );
         let db = runtime.block_on(CoreDatabaseOps::create_with_s3(
             &s3_path,
@@ -293,8 +316,9 @@ impl DatabaseOps {
     #[uniffi::constructor]
     pub fn open(path: String) -> Result<Arc<Self>, FsdbError> {
         let runtime = Arc::new(
-            tokio::runtime::Runtime::new()
-                .map_err(|e| FsdbError::Other { message: e.to_string() })?
+            tokio::runtime::Runtime::new().map_err(|e| FsdbError::Other {
+                message: e.to_string(),
+            })?,
         );
         let db = runtime.block_on(CoreDatabaseOps::open(&path))?;
         Ok(Arc::new(Self {
@@ -311,16 +335,17 @@ impl DatabaseOps {
         password: String,
     ) -> Result<Arc<Self>, FsdbError> {
         let runtime = Arc::new(
-            tokio::runtime::Runtime::new()
-                .map_err(|e| FsdbError::Other { message: e.to_string() })?
+            tokio::runtime::Runtime::new().map_err(|e| FsdbError::Other {
+                message: e.to_string(),
+            })?,
         );
-        
+
         // For credentials, we need to leak the strings to get 'static lifetime
         // This is acceptable since credentials are typically used for the lifetime of the app
         let username_static: &'static str = Box::leak(username.into_boxed_str());
         let password_static: &'static str = Box::leak(password.into_boxed_str());
         let credentials = Some((username_static, password_static));
-        
+
         let db = runtime.block_on(CoreDatabaseOps::open_with_credentials(&path, credentials))?;
         Ok(Arc::new(Self {
             inner: Arc::new(db),
@@ -332,8 +357,9 @@ impl DatabaseOps {
     #[uniffi::constructor]
     pub fn open_with_s3(s3_path: String, s3_config: S3Config) -> Result<Arc<Self>, FsdbError> {
         let runtime = Arc::new(
-            tokio::runtime::Runtime::new()
-                .map_err(|e| FsdbError::Other { message: e.to_string() })?
+            tokio::runtime::Runtime::new().map_err(|e| FsdbError::Other {
+                message: e.to_string(),
+            })?,
         );
         let db = runtime.block_on(CoreDatabaseOps::open_with_s3(
             &s3_path,
@@ -351,51 +377,57 @@ impl DatabaseOps {
 
     /// Insert data from JSON string
     pub fn insert_json(&self, json_data: String) -> Result<u64, FsdbError> {
-        let value: Value = serde_json::from_str(&json_data)
-            .map_err(|e| FsdbError::SerializationError { message: e.to_string() })?;
+        let value: Value =
+            serde_json::from_str(&json_data).map_err(|e| FsdbError::SerializationError {
+                message: e.to_string(),
+            })?;
 
         // Convert JSON array to RecordBatch
-        let array = value.as_array()
+        let array = value
+            .as_array()
             .ok_or_else(|| FsdbError::InvalidOperation {
-                message: "JSON must be an array of objects".to_string()
+                message: "JSON must be an array of objects".to_string(),
             })?;
 
         // Build RecordBatch from JSON
         let batch = self.json_array_to_record_batch(array)?;
         let rows_inserted = batch.num_rows() as u64;
-        
+
         self.runtime.block_on(self.inner.insert(batch))?;
         Ok(rows_inserted)
     }
 
     /// Insert data from JSON string with buffering for better performance
-    /// 
+    ///
     /// This method buffers small writes and automatically flushes when the buffer
     /// reaches 1000 rows (default). Use this for many small inserts to reduce
     /// transaction overhead.
-    /// 
+    ///
     /// Returns the number of rows buffered (not necessarily committed yet).
     /// Call flush_write_buffer() to force a commit.
     pub fn insert_buffered_json(&self, json_data: String) -> Result<u64, FsdbError> {
-        let value: Value = serde_json::from_str(&json_data)
-            .map_err(|e| FsdbError::SerializationError { message: e.to_string() })?;
+        let value: Value =
+            serde_json::from_str(&json_data).map_err(|e| FsdbError::SerializationError {
+                message: e.to_string(),
+            })?;
 
         // Convert JSON array to RecordBatch
-        let array = value.as_array()
+        let array = value
+            .as_array()
             .ok_or_else(|| FsdbError::InvalidOperation {
-                message: "JSON must be an array of objects".to_string()
+                message: "JSON must be an array of objects".to_string(),
             })?;
 
         // Build RecordBatch from JSON
         let batch = self.json_array_to_record_batch(array)?;
         let rows_buffered = batch.num_rows() as u64;
-        
+
         self.runtime.block_on(self.inner.insert_buffered(batch))?;
         Ok(rows_buffered)
     }
 
     /// Flush any buffered writes to Delta Lake immediately
-    /// 
+    ///
     /// Forces all buffered data from insert_buffered_json() to be committed.
     /// Call this before reading data to ensure consistency, or at shutdown.
     pub fn flush_write_buffer(&self) -> Result<(), FsdbError> {
@@ -413,34 +445,40 @@ impl DatabaseOps {
     pub fn query_json(&self, sql: String) -> Result<String, FsdbError> {
         let result = self.runtime.block_on(self.inner.query(&sql))?;
         let json_array = self.record_batches_to_json(result)?;
-        serde_json::to_string_pretty(&json_array)
-            .map_err(|e| FsdbError::SerializationError { message: e.to_string() })
+        serde_json::to_string_pretty(&json_array).map_err(|e| FsdbError::SerializationError {
+            message: e.to_string(),
+        })
     }
 
     /// Delete rows matching a WHERE clause
     pub fn delete_rows_where(&self, predicate: String) -> Result<u64, FsdbError> {
-        let count = self.runtime.block_on(self.inner.delete_rows_where(&predicate))?;
+        let count = self
+            .runtime
+            .block_on(self.inner.delete_rows_where(&predicate))?;
         Ok(count as u64)
     }
 
     /// Execute MERGE (UPSERT) operation from JSON data
-    /// 
+    ///
     /// JSON must be an array of objects with an "_op" field specifying the operation:
     /// - "INSERT": Insert new rows
     /// - "UPDATE": Update existing rows  
     /// - "DELETE": Delete existing rows
-    /// 
+    ///
     /// The join is performed on the specified join_column (typically "id").
-    /// 
+    ///
     /// Returns a JSON string with merge metrics: rows_inserted, rows_updated, rows_deleted
     pub fn merge_json(&self, json_data: String, join_column: String) -> Result<String, FsdbError> {
         // Parse JSON
-        let value: Value = serde_json::from_str(&json_data)
-            .map_err(|e| FsdbError::SerializationError { message: e.to_string() })?;
+        let value: Value =
+            serde_json::from_str(&json_data).map_err(|e| FsdbError::SerializationError {
+                message: e.to_string(),
+            })?;
 
-        let array = value.as_array()
+        let array = value
+            .as_array()
             .ok_or_else(|| FsdbError::InvalidOperation {
-                message: "JSON must be an array of objects".to_string()
+                message: "JSON must be an array of objects".to_string(),
             })?;
 
         if array.is_empty() {
@@ -449,27 +487,27 @@ impl DatabaseOps {
 
         // Build RecordBatch from JSON with _op column included
         let batch = self.json_array_to_record_batch_with_op(array)?;
-        
+
         // Execute MERGE
         let metrics = self.runtime.block_on(async {
             let merge_builder = self.inner.merge().await?;
-            
+
             merge_builder
                 .with_source(batch, "source")
                 .on(format!("target.{} = source.{}", join_column, join_column))
                 .when_matched_update()
-                    .condition("source._op = 'UPDATE'")
-                    .set_all()
+                .condition("source._op = 'UPDATE'")
+                .set_all()
                 .when_matched_delete()
-                    .condition("source._op = 'DELETE'")
-                    .then()
+                .condition("source._op = 'DELETE'")
+                .then()
                 .when_not_matched_insert()
-                    .condition("source._op = 'INSERT'")
-                    .values_all()
+                .condition("source._op = 'INSERT'")
+                .values_all()
                 .execute()
                 .await
         })?;
-        
+
         // Return metrics as JSON
         let result = serde_json::json!({
             "rows_inserted": metrics.rows_inserted,
@@ -477,39 +515,54 @@ impl DatabaseOps {
             "rows_deleted": metrics.rows_deleted,
             "total_affected": metrics.total_rows_affected()
         });
-        
-        Ok(serde_json::to_string_pretty(&result)
-            .map_err(|e| FsdbError::SerializationError { message: e.to_string() })?)
+
+        serde_json::to_string_pretty(&result).map_err(|e| FsdbError::SerializationError {
+            message: e.to_string(),
+        })
     }
 
     // Time travel operations
 
     /// Query data at a specific version
     pub fn query_version(&self, sql: String, version: i64) -> Result<Vec<Row>, FsdbError> {
-        let result = self.runtime.block_on(self.inner.query_version(&sql, version))?;
+        let result = self
+            .runtime
+            .block_on(self.inner.query_version(&sql, version))?;
         Ok(self.record_batches_to_rows(result))
     }
 
     /// Query data at a specific version and return as JSON
     pub fn query_version_json(&self, sql: String, version: i64) -> Result<String, FsdbError> {
-        let result = self.runtime.block_on(self.inner.query_version(&sql, version))?;
+        let result = self
+            .runtime
+            .block_on(self.inner.query_version(&sql, version))?;
         let json_array = self.record_batches_to_json(result)?;
-        serde_json::to_string_pretty(&json_array)
-            .map_err(|e| FsdbError::SerializationError { message: e.to_string() })
+        serde_json::to_string_pretty(&json_array).map_err(|e| FsdbError::SerializationError {
+            message: e.to_string(),
+        })
     }
 
     /// Query data at a specific timestamp (milliseconds since epoch)
     pub fn query_timestamp(&self, sql: String, timestamp_ms: i64) -> Result<Vec<Row>, FsdbError> {
-        let result = self.runtime.block_on(self.inner.query_timestamp(&sql, timestamp_ms))?;
+        let result = self
+            .runtime
+            .block_on(self.inner.query_timestamp(&sql, timestamp_ms))?;
         Ok(self.record_batches_to_rows(result))
     }
 
     /// Query data at a specific timestamp and return as JSON
-    pub fn query_timestamp_json(&self, sql: String, timestamp_ms: i64) -> Result<String, FsdbError> {
-        let result = self.runtime.block_on(self.inner.query_timestamp(&sql, timestamp_ms))?;
+    pub fn query_timestamp_json(
+        &self,
+        sql: String,
+        timestamp_ms: i64,
+    ) -> Result<String, FsdbError> {
+        let result = self
+            .runtime
+            .block_on(self.inner.query_timestamp(&sql, timestamp_ms))?;
         let json_array = self.record_batches_to_json(result)?;
-        serde_json::to_string_pretty(&json_array)
-            .map_err(|e| FsdbError::SerializationError { message: e.to_string() })
+        serde_json::to_string_pretty(&json_array).map_err(|e| FsdbError::SerializationError {
+            message: e.to_string(),
+        })
     }
 
     // Delta Lake operations
@@ -522,13 +575,15 @@ impl DatabaseOps {
 
     /// Run OPTIMIZE with a target file size
     pub fn optimize_with_target_size(&self, target_size_bytes: u64) -> Result<(), FsdbError> {
-        self.runtime.block_on(self.inner.optimize_with_target_size(target_size_bytes))?;
+        self.runtime
+            .block_on(self.inner.optimize_with_target_size(target_size_bytes))?;
         Ok(())
     }
 
     /// Run OPTIMIZE with a filter
     pub fn optimize_with_filter(&self, filter: String) -> Result<(), FsdbError> {
-        self.runtime.block_on(self.inner.optimize_with_filter(&filter))?;
+        self.runtime
+            .block_on(self.inner.optimize_with_filter(&filter))?;
         Ok(())
     }
 
@@ -540,7 +595,9 @@ impl DatabaseOps {
 
     /// Run VACUUM dry run to see what would be deleted
     pub fn vacuum_dry_run(&self, retention_hours: u64) -> Result<Vec<String>, FsdbError> {
-        let files = self.runtime.block_on(self.inner.vacuum_dry_run(retention_hours))?;
+        let files = self
+            .runtime
+            .block_on(self.inner.vacuum_dry_run(retention_hours))?;
         Ok(files)
     }
 
@@ -554,9 +611,15 @@ impl DatabaseOps {
     // User management
 
     /// Create a new user with roles
-    pub fn create_user(&self, username: String, password: String, roles: Vec<String>) -> Result<(), FsdbError> {
+    pub fn create_user(
+        &self,
+        username: String,
+        password: String,
+        roles: Vec<String>,
+    ) -> Result<(), FsdbError> {
         let role_refs: Vec<&str> = roles.iter().map(|s| s.as_str()).collect();
-        self.runtime.block_on(self.inner.create_user(&username, &password, &role_refs))?;
+        self.runtime
+            .block_on(self.inner.create_user(&username, &password, &role_refs))?;
         Ok(())
     }
 
@@ -569,8 +632,15 @@ impl DatabaseOps {
     }
 
     /// Create an incremental backup
-    pub fn backup_incremental(&self, base_backup_path: String, incremental_path: String) -> Result<(), FsdbError> {
-        self.runtime.block_on(self.inner.backup_incremental(&base_backup_path, &incremental_path))?;
+    pub fn backup_incremental(
+        &self,
+        base_backup_path: String,
+        incremental_path: String,
+    ) -> Result<(), FsdbError> {
+        self.runtime.block_on(
+            self.inner
+                .backup_incremental(&base_backup_path, &incremental_path),
+        )?;
         Ok(())
     }
 
@@ -605,7 +675,9 @@ impl DatabaseOps {
 
     /// Get data skipping statistics
     pub fn get_data_skipping_stats(&self) -> Result<DataSkippingStats, FsdbError> {
-        let stats = self.runtime.block_on(self.inner.get_data_skipping_stats())?;
+        let stats = self
+            .runtime
+            .block_on(self.inner.get_data_skipping_stats())?;
         Ok(DataSkippingStats {
             total_files: stats.total_files as u64,
             files_read: stats.files_read as u64,
@@ -630,54 +702,78 @@ impl DatabaseOps {
 impl DatabaseOps {
     /// Convert JSON array to RecordBatch
     /// Arrow JSON reader expects newline-delimited JSON (NDJSON), not JSON array
-    fn json_array_to_record_batch(&self, json_array: &Vec<Value>) -> Result<arrow::array::RecordBatch, FsdbError> {
+    fn json_array_to_record_batch(
+        &self,
+        json_array: &[Value],
+    ) -> Result<arrow::array::RecordBatch, FsdbError> {
         use arrow::json::ReaderBuilder;
         use std::io::Cursor;
-        
+
         // Convert JSON array to newline-delimited JSON (NDJSON)
         let ndjson: String = json_array
             .iter()
             .map(|v| serde_json::to_string(v).unwrap_or_default())
             .collect::<Vec<String>>()
             .join("\n");
-        
+
         let cursor = Cursor::new(ndjson.as_bytes());
         let mut reader = ReaderBuilder::new(self.inner.schema.clone())
             .build(cursor)
-            .map_err(|e| FsdbError::ArrowError { message: e.to_string() })?;
-        
-        reader.next()
-            .ok_or_else(|| FsdbError::InvalidOperation { message: "No data to insert".to_string() })?
-            .map_err(|e| FsdbError::ArrowError { message: e.to_string() })
+            .map_err(|e| FsdbError::ArrowError {
+                message: e.to_string(),
+            })?;
+
+        reader
+            .next()
+            .ok_or_else(|| FsdbError::InvalidOperation {
+                message: "No data to insert".to_string(),
+            })?
+            .map_err(|e| FsdbError::ArrowError {
+                message: e.to_string(),
+            })
     }
-    
+
     /// Convert JSON array to RecordBatch with _op column included
     /// Used for MERGE operations where we need the _op column
-    fn json_array_to_record_batch_with_op(&self, json_array: &Vec<Value>) -> Result<arrow::array::RecordBatch, FsdbError> {
-        use arrow::json::ReaderBuilder;
+    fn json_array_to_record_batch_with_op(
+        &self,
+        json_array: &[Value],
+    ) -> Result<arrow::array::RecordBatch, FsdbError> {
         use arrow::datatypes::{Field as ArrowField, Schema as ArrowSchema};
+        use arrow::json::ReaderBuilder;
         use std::io::Cursor;
-        
+
         // Create schema with _op column added
         let mut fields = self.inner.schema.fields().to_vec();
-        fields.push(Arc::new(ArrowField::new("_op", arrow::datatypes::DataType::Utf8, false)));
+        fields.push(Arc::new(ArrowField::new(
+            "_op",
+            arrow::datatypes::DataType::Utf8,
+            false,
+        )));
         let schema_with_op = Arc::new(ArrowSchema::new(fields));
-        
+
         // Convert JSON array to newline-delimited JSON (NDJSON)
         let ndjson: String = json_array
             .iter()
             .map(|v| serde_json::to_string(v).unwrap_or_default())
             .collect::<Vec<String>>()
             .join("\n");
-        
+
         let cursor = Cursor::new(ndjson.as_bytes());
         let mut reader = ReaderBuilder::new(schema_with_op)
             .build(cursor)
-            .map_err(|e| FsdbError::ArrowError { message: e.to_string() })?;
-        
-        reader.next()
-            .ok_or_else(|| FsdbError::InvalidOperation { message: "No data to insert".to_string() })?
-            .map_err(|e| FsdbError::ArrowError { message: e.to_string() })
+            .map_err(|e| FsdbError::ArrowError {
+                message: e.to_string(),
+            })?;
+
+        reader
+            .next()
+            .ok_or_else(|| FsdbError::InvalidOperation {
+                message: "No data to insert".to_string(),
+            })?
+            .map_err(|e| FsdbError::ArrowError {
+                message: e.to_string(),
+            })
     }
 
     /// Convert RecordBatches to Rows
@@ -703,23 +799,30 @@ impl DatabaseOps {
     }
 
     /// Convert RecordBatches to JSON
-    fn record_batches_to_json(&self, batches: Vec<arrow::array::RecordBatch>) -> Result<Vec<Value>, FsdbError> {
+    fn record_batches_to_json(
+        &self,
+        batches: Vec<arrow::array::RecordBatch>,
+    ) -> Result<Vec<Value>, FsdbError> {
         use arrow::json::ArrayWriter;
         use std::io::Cursor;
-        
+
         let mut json_rows = Vec::new();
         for batch in batches {
             let mut cursor = Cursor::new(Vec::new());
             let mut writer = ArrayWriter::new(&mut cursor);
-            writer.write(&batch)
-                .map_err(|e| FsdbError::ArrowError { message: e.to_string() })?;
-            writer.finish()
-                .map_err(|e| FsdbError::ArrowError { message: e.to_string() })?;
-            
+            writer.write(&batch).map_err(|e| FsdbError::ArrowError {
+                message: e.to_string(),
+            })?;
+            writer.finish().map_err(|e| FsdbError::ArrowError {
+                message: e.to_string(),
+            })?;
+
             let json_bytes = cursor.into_inner();
-            let json_value: Value = serde_json::from_slice(&json_bytes)
-                .map_err(|e| FsdbError::SerializationError { message: e.to_string() })?;
-            
+            let json_value: Value =
+                serde_json::from_slice(&json_bytes).map_err(|e| FsdbError::SerializationError {
+                    message: e.to_string(),
+                })?;
+
             if let Value::Array(arr) = json_value {
                 json_rows.extend(arr);
             }
@@ -742,13 +845,14 @@ impl NfsServer {
     #[uniffi::constructor]
     pub fn new(db: Arc<DatabaseOps>, port: u16) -> Result<Arc<Self>, FsdbError> {
         let runtime = Arc::new(
-            tokio::runtime::Runtime::new()
-                .map_err(|e| FsdbError::Other { message: e.to_string() })?
+            tokio::runtime::Runtime::new().map_err(|e| FsdbError::Other {
+                message: e.to_string(),
+            })?,
         );
-        
+
         let db_inner = db.inner.clone();
         let server = runtime.block_on(crate::nfs::NfsServer::new(db_inner, port))?;
-        
+
         Ok(Arc::new(Self {
             inner: Arc::new(tokio::sync::Mutex::new(Some(server))),
             runtime,
@@ -764,9 +868,10 @@ impl NfsServer {
     /// Check if server is ready
     pub fn is_ready(&self) -> bool {
         let inner = self.runtime.block_on(self.inner.lock());
-        inner.as_ref().map(|s| {
-            self.runtime.block_on(s.is_ready())
-        }).unwrap_or(false)
+        inner
+            .as_ref()
+            .map(|s| self.runtime.block_on(s.is_ready()))
+            .unwrap_or(false)
     }
 
     /// Shutdown the NFS server
@@ -775,7 +880,7 @@ impl NfsServer {
             let mut inner = self.inner.lock().await;
             inner.take()
         });
-        
+
         if let Some(server) = server {
             self.runtime.block_on(server.shutdown())?;
         }
@@ -790,12 +895,15 @@ impl NfsServer {
                 "sudo".to_string(),
                 "mount_nfs".to_string(),
                 "-o".to_string(),
-                format!("nolocks,vers=3,tcp,port={},mountport={}", self.port, self.port),
+                format!(
+                    "nolocks,vers=3,tcp,port={},mountport={}",
+                    self.port, self.port
+                ),
                 "localhost:/".to_string(),
                 mount_point,
             ]
         }
-        
+
         #[cfg(target_os = "linux")]
         {
             vec![
@@ -804,12 +912,15 @@ impl NfsServer {
                 "-t".to_string(),
                 "nfs".to_string(),
                 "-o".to_string(),
-                format!("nolocks,vers=3,tcp,port={},mountport={}", self.port, self.port),
+                format!(
+                    "nolocks,vers=3,tcp,port={},mountport={}",
+                    self.port, self.port
+                ),
                 "localhost:/".to_string(),
                 mount_point,
             ]
         }
-        
+
         #[cfg(not(any(target_os = "macos", target_os = "linux")))]
         {
             vec!["echo".to_string(), "Unsupported platform".to_string()]
@@ -820,13 +931,9 @@ impl NfsServer {
     pub fn get_unmount_command(&self, mount_point: String) -> Vec<String> {
         #[cfg(any(target_os = "macos", target_os = "linux"))]
         {
-            vec![
-                "sudo".to_string(),
-                "umount".to_string(),
-                mount_point,
-            ]
+            vec!["sudo".to_string(), "umount".to_string(), mount_point]
         }
-        
+
         #[cfg(not(any(target_os = "macos", target_os = "linux")))]
         {
             vec!["echo".to_string(), "Unsupported platform".to_string()]
@@ -837,8 +944,9 @@ impl NfsServer {
 // Standalone restore functions
 #[uniffi::export]
 pub fn restore(backup_path: String, restore_path: String) -> Result<(), FsdbError> {
-    let runtime = tokio::runtime::Runtime::new()
-        .map_err(|e| FsdbError::Other { message: e.to_string() })?;
+    let runtime = tokio::runtime::Runtime::new().map_err(|e| FsdbError::Other {
+        message: e.to_string(),
+    })?;
     runtime.block_on(CoreDatabaseOps::restore(&backup_path, &restore_path))?;
     Ok(())
 }
@@ -849,8 +957,9 @@ pub fn restore_to_transaction(
     restore_path: String,
     transaction_id: u64,
 ) -> Result<(), FsdbError> {
-    let runtime = tokio::runtime::Runtime::new()
-        .map_err(|e| FsdbError::Other { message: e.to_string() })?;
+    let runtime = tokio::runtime::Runtime::new().map_err(|e| FsdbError::Other {
+        message: e.to_string(),
+    })?;
     runtime.block_on(CoreDatabaseOps::restore_to_transaction(
         &backup_path,
         &restore_path,

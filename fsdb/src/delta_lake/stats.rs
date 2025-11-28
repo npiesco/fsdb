@@ -15,22 +15,29 @@ pub struct ColumnStats {
     pub null_count: u64,
 }
 
+/// Type alias for column statistics maps (min, max, null_count)
+pub type ColumnStatsMaps = (
+    HashMap<String, serde_json::Value>,
+    HashMap<String, serde_json::Value>,
+    HashMap<String, u64>,
+);
+
 /// Compute column statistics from a RecordBatch
-pub fn compute_column_statistics(batch: &RecordBatch) -> Result<(HashMap<String, serde_json::Value>, HashMap<String, serde_json::Value>, HashMap<String, u64>)> {
+pub fn compute_column_statistics(batch: &RecordBatch) -> Result<ColumnStatsMaps> {
     let mut min_values = HashMap::new();
     let mut max_values = HashMap::new();
     let mut null_counts = HashMap::new();
-    
+
     let schema = batch.schema();
-    
+
     for (col_idx, field) in schema.fields().iter().enumerate() {
         let column = batch.column(col_idx);
         let col_name = field.name().clone();
-        
+
         // Count nulls
         let null_count = column.null_count() as u64;
         null_counts.insert(col_name.clone(), null_count);
-        
+
         // Compute min/max based on data type
         match field.data_type() {
             DataType::Int32 => {
@@ -86,17 +93,19 @@ pub fn compute_column_statistics(batch: &RecordBatch) -> Result<(HashMap<String,
             _ => {}
         }
     }
-    
+
     Ok((min_values, max_values, null_counts))
 }
 
 /// Get column statistics from Delta Lake transaction log
-pub fn get_column_statistics_from_delta(base_path: &std::path::Path) -> Result<HashMap<String, ColumnStats>> {
-    use crate::query::pruning::{is_value_less_than, is_value_greater_than};
-    
+pub fn get_column_statistics_from_delta(
+    base_path: &std::path::Path,
+) -> Result<HashMap<String, ColumnStats>> {
+    use crate::query::pruning::{is_value_greater_than, is_value_less_than};
+
     let delta_log_path = base_path.join("_delta_log");
     let mut column_stats: HashMap<String, ColumnStats> = HashMap::new();
-    
+
     // Read all Delta Lake commit files
     let mut commit_files = Vec::new();
     for entry in std::fs::read_dir(&delta_log_path)? {
@@ -111,14 +120,14 @@ pub fn get_column_statistics_from_delta(base_path: &std::path::Path) -> Result<H
             }
         }
     }
-    
+
     // Sort by version
     commit_files.sort_by_key(|(v, _)| *v);
-    
+
     // Read stats from each commit file (JSONL format)
     for (_version, commit_path) in commit_files {
         let content = std::fs::read_to_string(&commit_path)?;
-        
+
         // Parse each line as JSON
         for line in content.lines() {
             if let Ok(json) = serde_json::from_str::<serde_json::Value>(line) {
@@ -126,29 +135,35 @@ pub fn get_column_statistics_from_delta(base_path: &std::path::Path) -> Result<H
                 if let Some(add) = json.get("add") {
                     if let Some(stats_str) = add.get("stats").and_then(|s| s.as_str()) {
                         // Parse the stats JSON string
-                        if let Ok(stats_json) = serde_json::from_str::<serde_json::Value>(stats_str) {
+                        if let Ok(stats_json) = serde_json::from_str::<serde_json::Value>(stats_str)
+                        {
                             // Extract minValues, maxValues, nullCount
                             if let (Some(min_vals), Some(max_vals), Some(null_counts)) = (
                                 stats_json.get("minValues"),
                                 stats_json.get("maxValues"),
-                                stats_json.get("nullCount")
+                                stats_json.get("nullCount"),
                             ) {
                                 // Process each column
                                 if let Some(min_obj) = min_vals.as_object() {
                                     for (col_name, min_val) in min_obj {
                                         if let Some(max_val) = max_vals.get(col_name) {
-                                            let null_count = null_counts.get(col_name)
+                                            let null_count = null_counts
+                                                .get(col_name)
                                                 .and_then(|v| v.as_u64())
                                                 .unwrap_or(0);
-                                            
+
                                             // Update global min/max for this column
                                             column_stats
                                                 .entry(col_name.clone())
                                                 .and_modify(|stats| {
-                                                    if is_value_less_than(min_val, &stats.min_value) {
+                                                    if is_value_less_than(min_val, &stats.min_value)
+                                                    {
                                                         stats.min_value = min_val.clone();
                                                     }
-                                                    if is_value_greater_than(max_val, &stats.max_value) {
+                                                    if is_value_greater_than(
+                                                        max_val,
+                                                        &stats.max_value,
+                                                    ) {
                                                         stats.max_value = max_val.clone();
                                                     }
                                                     stats.null_count += null_count;
@@ -168,14 +183,17 @@ pub fn get_column_statistics_from_delta(base_path: &std::path::Path) -> Result<H
             }
         }
     }
-    
+
     Ok(column_stats)
 }
 
 /// Find Delta version from timestamp
-pub fn find_delta_version_by_timestamp(restore_path: &std::path::Path, target_timestamp: u64) -> Result<u64> {
+pub fn find_delta_version_by_timestamp(
+    restore_path: &std::path::Path,
+    target_timestamp: u64,
+) -> Result<u64> {
     let delta_log_path = restore_path.join("_delta_log");
-    
+
     // Find highest version
     let mut max_version = 0u64;
     for entry in std::fs::read_dir(&delta_log_path)? {
@@ -192,17 +210,17 @@ pub fn find_delta_version_by_timestamp(restore_path: &std::path::Path, target_ti
             }
         }
     }
-    
+
     // Find the version whose timestamp is closest to but not after target_timestamp
     let mut target_version = 0u64;
-    
+
     for version in 0..=max_version {
         let commit_file = format!("{:020}.json", version);
         let commit_path = delta_log_path.join(&commit_file);
-        
+
         if commit_path.exists() {
             let content = std::fs::read_to_string(&commit_path)?;
-            
+
             // Parse each line as JSON to find commitInfo
             for line in content.lines() {
                 if let Ok(json) = serde_json::from_str::<serde_json::Value>(line) {
@@ -220,8 +238,10 @@ pub fn find_delta_version_by_timestamp(restore_path: &std::path::Path, target_ti
             }
         }
     }
-    
-    info!("Mapped timestamp {} to Delta version {}", target_timestamp, target_version);
+
+    info!(
+        "Mapped timestamp {} to Delta version {}",
+        target_timestamp, target_version
+    );
     Ok(target_version)
 }
-
