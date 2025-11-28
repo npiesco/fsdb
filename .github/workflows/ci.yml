@@ -109,26 +109,6 @@ jobs:
         if: always()
         run: docker stop minio && docker rm minio
 
-  # Code coverage
-  coverage:
-    name: Code Coverage
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      
-      - name: Install cargo-tarpaulin
-        run: cargo install cargo-tarpaulin
-      
-      - name: Generate coverage
-        run: cargo tarpaulin --out Xml --output-dir coverage --verbose --lib --tests
-      
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
-        with:
-          files: ./coverage/cobertura.xml
-          fail_ci_if_error: false
-
   # Documentation build
   docs:
     name: Documentation

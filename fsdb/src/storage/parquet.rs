@@ -5,7 +5,7 @@
 //! - Read Parquet files back to RecordBatch
 //! - Compression support (Snappy default)
 //! - Column statistics and metadata
-//! - Filename convention: data_<timestamp>_<txn_id>.parquet
+//! - Filename convention: `data_<timestamp>_<txn_id>.parquet`
 
 use crate::Result;
 use arrow::array::{RecordBatch, RecordBatchReader};

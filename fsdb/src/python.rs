@@ -888,7 +888,7 @@ impl NfsServer {
     }
 
     /// Get mount command for this platform
-    pub fn get_mount_command(&self, mount_point: String) -> Vec<String> {
+    pub fn get_mount_command(&self, #[allow(unused_variables)] mount_point: String) -> Vec<String> {
         #[cfg(target_os = "macos")]
         {
             vec![
@@ -928,7 +928,10 @@ impl NfsServer {
     }
 
     /// Get unmount command for this platform
-    pub fn get_unmount_command(&self, mount_point: String) -> Vec<String> {
+    pub fn get_unmount_command(
+        &self,
+        #[allow(unused_variables)] mount_point: String,
+    ) -> Vec<String> {
         #[cfg(any(target_os = "macos", target_os = "linux"))]
         {
             vec!["sudo".to_string(), "umount".to_string(), mount_point]
