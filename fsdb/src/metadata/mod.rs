@@ -4,5 +4,4 @@ pub mod backup;
 pub mod schema;
 
 pub use backup::{BackupMetadata, BackupVerificationReport};
-pub use schema::{Schema, SchemaVersion, SchemaField, SchemaManager, DataTypeRepr};
-
+pub use schema::{DataTypeRepr, Schema, SchemaField, SchemaManager, SchemaVersion};

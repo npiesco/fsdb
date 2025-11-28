@@ -1,5 +1,5 @@
 //! Delta Lake MERGE Integration Tests
-//! 
+//!
 //! These tests validate the MERGE operation (INSERT + UPDATE + DELETE in single transaction)
 //! All tests use real Delta Lake operations, no mocks.
 
@@ -15,7 +15,7 @@ use tempfile::TempDir;
 #[tokio::test]
 async fn test_merge_insert_only() {
     println!("\n[TEST] test_merge_insert_only - INSERT new rows via MERGE");
-    
+
     let temp_dir = TempDir::new().unwrap();
     let db_path = temp_dir.path().join("test_merge_insert");
 
@@ -45,7 +45,10 @@ async fn test_merge_insert_only() {
     println!("[SETUP] Inserted 3 initial rows");
 
     // Verify initial state
-    let results = db.query("SELECT COUNT(*) as count FROM data").await.unwrap();
+    let results = db
+        .query("SELECT COUNT(*) as count FROM data")
+        .await
+        .unwrap();
     let count = results[0]
         .column_by_name("count")
         .unwrap()
@@ -65,9 +68,9 @@ async fn test_merge_insert_only() {
         ],
     )
     .unwrap();
-    
+
     println!("[MERGE] Executing MERGE to insert new rows");
-    
+
     // Execute MERGE
     let merge_start = std::time::Instant::now();
     let metrics = db
@@ -89,7 +92,10 @@ async fn test_merge_insert_only() {
     println!("[RESULT] Rows deleted: {}", metrics.rows_deleted);
 
     // Verify: should have 5 rows now (3 initial + 2 new)
-    let results = db.query("SELECT COUNT(*) as count FROM data").await.unwrap();
+    let results = db
+        .query("SELECT COUNT(*) as count FROM data")
+        .await
+        .unwrap();
     let count = results[0]
         .column_by_name("count")
         .unwrap()
@@ -97,16 +103,19 @@ async fn test_merge_insert_only() {
         .downcast_ref::<Int64Array>()
         .unwrap()
         .value(0);
-    
+
     assert_eq!(count, 5, "Should have 5 rows after MERGE");
     assert_eq!(metrics.rows_inserted, 2, "Should have inserted 2 rows");
     assert_eq!(metrics.rows_updated, 0, "Should have updated 0 rows");
     assert_eq!(metrics.rows_deleted, 0, "Should have deleted 0 rows");
 
     // Verify the new rows exist
-    let results = db.query("SELECT * FROM data WHERE id IN (4, 5) ORDER BY id").await.unwrap();
+    let results = db
+        .query("SELECT * FROM data WHERE id IN (4, 5) ORDER BY id")
+        .await
+        .unwrap();
     assert_eq!(results[0].num_rows(), 2, "Should find both new rows");
-    
+
     let ids = results[0]
         .column_by_name("id")
         .unwrap()
@@ -115,7 +124,7 @@ async fn test_merge_insert_only() {
         .unwrap();
     assert_eq!(ids.value(0), 4);
     assert_eq!(ids.value(1), 5);
-    
+
     let names = results[0]
         .column_by_name("name")
         .unwrap()
@@ -133,7 +142,7 @@ async fn test_merge_insert_only() {
 #[tokio::test]
 async fn test_merge_update_only() {
     println!("\n[TEST] test_merge_update_only - UPDATE existing rows via MERGE");
-    
+
     let temp_dir = TempDir::new().unwrap();
     let db_path = temp_dir.path().join("test_merge_update");
 
@@ -171,9 +180,9 @@ async fn test_merge_update_only() {
         ],
     )
     .unwrap();
-    
+
     println!("[MERGE] Executing MERGE to update existing rows");
-    
+
     let merge_start = std::time::Instant::now();
     let metrics = db
         .merge()
@@ -192,7 +201,10 @@ async fn test_merge_update_only() {
     println!("[RESULT] Rows updated: {}", metrics.rows_updated);
 
     // Verify: should still have 3 rows
-    let results = db.query("SELECT COUNT(*) as count FROM data").await.unwrap();
+    let results = db
+        .query("SELECT COUNT(*) as count FROM data")
+        .await
+        .unwrap();
     let count = results[0]
         .column_by_name("count")
         .unwrap()
@@ -200,14 +212,17 @@ async fn test_merge_update_only() {
         .downcast_ref::<Int64Array>()
         .unwrap()
         .value(0);
-    
+
     assert_eq!(count, 3, "Should still have 3 rows after UPDATE");
     assert_eq!(metrics.rows_updated, 2, "Should have updated 2 rows");
     assert_eq!(metrics.rows_inserted, 0, "Should have inserted 0 rows");
     assert_eq!(metrics.rows_deleted, 0, "Should have deleted 0 rows");
 
     // Verify the updated values
-    let results = db.query("SELECT * FROM data WHERE id IN (1, 2) ORDER BY id").await.unwrap();
+    let results = db
+        .query("SELECT * FROM data WHERE id IN (1, 2) ORDER BY id")
+        .await
+        .unwrap();
     let names = results[0]
         .column_by_name("name")
         .unwrap()
@@ -216,7 +231,7 @@ async fn test_merge_update_only() {
         .unwrap();
     assert_eq!(names.value(0), "Alice Updated");
     assert_eq!(names.value(1), "Bob Updated");
-    
+
     let ages = results[0]
         .column_by_name("age")
         .unwrap()
@@ -234,7 +249,7 @@ async fn test_merge_update_only() {
 #[tokio::test]
 async fn test_merge_delete_only() {
     println!("\n[TEST] test_merge_delete_only - DELETE rows via MERGE");
-    
+
     let temp_dir = TempDir::new().unwrap();
     let db_path = temp_dir.path().join("test_merge_delete");
 
@@ -254,7 +269,9 @@ async fn test_merge_delete_only() {
         schema.clone(),
         vec![
             Arc::new(Int32Array::from(vec![1, 2, 3, 4, 5])),
-            Arc::new(StringArray::from(vec!["Alice", "Bob", "Charlie", "David", "Eve"])),
+            Arc::new(StringArray::from(vec![
+                "Alice", "Bob", "Charlie", "David", "Eve",
+            ])),
             Arc::new(Int32Array::from(vec![25, 30, 35, 28, 32])),
         ],
     )
@@ -272,9 +289,9 @@ async fn test_merge_delete_only() {
         ],
     )
     .unwrap();
-    
+
     println!("[MERGE] Executing MERGE to delete rows");
-    
+
     let merge_start = std::time::Instant::now();
     let metrics = db
         .merge()
@@ -293,7 +310,10 @@ async fn test_merge_delete_only() {
     println!("[RESULT] Rows deleted: {}", metrics.rows_deleted);
 
     // Verify: should have 3 rows remaining (1, 3, 5)
-    let results = db.query("SELECT COUNT(*) as count FROM data").await.unwrap();
+    let results = db
+        .query("SELECT COUNT(*) as count FROM data")
+        .await
+        .unwrap();
     let count = results[0]
         .column_by_name("count")
         .unwrap()
@@ -301,7 +321,7 @@ async fn test_merge_delete_only() {
         .downcast_ref::<Int64Array>()
         .unwrap()
         .value(0);
-    
+
     assert_eq!(count, 3, "Should have 3 rows after DELETE");
     assert_eq!(metrics.rows_deleted, 2, "Should have deleted 2 rows");
     assert_eq!(metrics.rows_inserted, 0, "Should have inserted 0 rows");
@@ -327,7 +347,7 @@ async fn test_merge_delete_only() {
 #[tokio::test]
 async fn test_merge_full_upsert() {
     println!("\n[TEST] test_merge_full_upsert - INSERT + UPDATE + DELETE in single MERGE");
-    
+
     let temp_dir = TempDir::new().unwrap();
     let db_path = temp_dir.path().join("test_merge_full");
 
@@ -337,12 +357,12 @@ async fn test_merge_full_upsert() {
         Field::new("name", DataType::Utf8, false),
         Field::new("age", DataType::Int32, false),
     ]));
-    
+
     let source_schema = Arc::new(ArrowSchema::new(vec![
         Field::new("id", DataType::Int32, false),
         Field::new("name", DataType::Utf8, false),
         Field::new("age", DataType::Int32, false),
-        Field::new("_op", DataType::Utf8, false),  // Operation type
+        Field::new("_op", DataType::Utf8, false), // Operation type
     ]));
 
     println!("[SETUP] Creating database");
@@ -379,9 +399,9 @@ async fn test_merge_full_upsert() {
         ],
     )
     .unwrap();
-    
+
     println!("[MERGE] Executing full MERGE with INSERT + UPDATE + DELETE");
-    
+
     let merge_start = std::time::Instant::now();
     let metrics = db
         .merge()
@@ -390,14 +410,14 @@ async fn test_merge_full_upsert() {
         .with_source(source_batch, "source")
         .on("target.id = source.id")
         .when_matched_update()
-            .condition("source._op = 'UPDATE'")
-            .set_all()
+        .condition("source._op = 'UPDATE'")
+        .set_all()
         .when_matched_delete()
-            .condition("source._op = 'DELETE'")
-            .then()
+        .condition("source._op = 'DELETE'")
+        .then()
         .when_not_matched_insert()
-            .condition("source._op = 'INSERT'")
-            .values_all()
+        .condition("source._op = 'INSERT'")
+        .values_all()
         .execute()
         .await
         .unwrap();
@@ -415,7 +435,10 @@ async fn test_merge_full_upsert() {
     assert_eq!(metrics.rows_deleted, 1, "Should have deleted 1 row (Bob)");
 
     // Verify final row count: started with 4, deleted 1, inserted 1 = 4 total
-    let results = db.query("SELECT COUNT(*) as count FROM data").await.unwrap();
+    let results = db
+        .query("SELECT COUNT(*) as count FROM data")
+        .await
+        .unwrap();
     let count = results[0]
         .column_by_name("count")
         .unwrap()
@@ -423,12 +446,15 @@ async fn test_merge_full_upsert() {
         .downcast_ref::<Int64Array>()
         .unwrap()
         .value(0);
-    
+
     assert_eq!(count, 4, "Should have 4 rows after MERGE");
 
     // Verify specific rows
     // Alice should be updated
-    let results = db.query("SELECT name, age FROM data WHERE id = 1").await.unwrap();
+    let results = db
+        .query("SELECT name, age FROM data WHERE id = 1")
+        .await
+        .unwrap();
     assert_eq!(results[0].num_rows(), 1);
     let name = results[0]
         .column_by_name("name")
@@ -448,7 +474,10 @@ async fn test_merge_full_upsert() {
     assert_eq!(age, 26, "Alice's age should be updated");
 
     // Bob should be deleted
-    let results = db.query("SELECT COUNT(*) as count FROM data WHERE id = 2").await.unwrap();
+    let results = db
+        .query("SELECT COUNT(*) as count FROM data WHERE id = 2")
+        .await
+        .unwrap();
     let count = results[0]
         .column_by_name("count")
         .unwrap()
@@ -459,7 +488,10 @@ async fn test_merge_full_upsert() {
     assert_eq!(count, 0, "Bob should be deleted");
 
     // Charlie should be unchanged
-    let results = db.query("SELECT name FROM data WHERE id = 3").await.unwrap();
+    let results = db
+        .query("SELECT name FROM data WHERE id = 3")
+        .await
+        .unwrap();
     assert_eq!(results[0].num_rows(), 1);
     let name = results[0]
         .column_by_name("name")
@@ -471,7 +503,10 @@ async fn test_merge_full_upsert() {
     assert_eq!(name, "Charlie", "Charlie should be unchanged");
 
     // Eve should be inserted
-    let results = db.query("SELECT name, age FROM data WHERE id = 5").await.unwrap();
+    let results = db
+        .query("SELECT name, age FROM data WHERE id = 5")
+        .await
+        .unwrap();
     assert_eq!(results[0].num_rows(), 1);
     let name = results[0]
         .column_by_name("name")
@@ -492,4 +527,3 @@ async fn test_merge_full_upsert() {
 
     println!("[SUCCESS] Full MERGE test passed");
 }
-

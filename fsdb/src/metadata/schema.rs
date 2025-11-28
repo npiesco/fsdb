@@ -1,20 +1,19 @@
 //! Schema definition and versioning using Arrow with nom parsers
 
-use serde::{Deserialize, Serialize};
+use crate::Result;
 use arrow::datatypes::{DataType, Field, Schema as ArrowSchema, TimeUnit};
 use nom::{
-    IResult,
-    Parser,
     branch::alt,
     bytes::complete::{tag, take_while1},
     character::complete::{char, digit1, multispace0},
     combinator::{map, opt, recognize},
     multi::separated_list0,
     sequence::{delimited, preceded},
+    IResult, Parser,
 };
+use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use crate::Result;
 
 /// Database schema with versioning
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -160,9 +159,10 @@ impl DataTypeRepr {
             DataType::LargeBinary => DataTypeRepr::LargeBinary,
             DataType::Date32 => DataTypeRepr::Date32,
             DataType::Date64 => DataTypeRepr::Date64,
-            DataType::Timestamp(unit, tz) => {
-                DataTypeRepr::Timestamp(TimeUnitRepr::from_arrow(unit), tz.as_ref().map(|s| s.to_string()))
-            }
+            DataType::Timestamp(unit, tz) => DataTypeRepr::Timestamp(
+                TimeUnitRepr::from_arrow(unit),
+                tz.as_ref().map(|s| s.to_string()),
+            ),
             DataType::Time32(unit) => DataTypeRepr::Time32(TimeUnitRepr::from_arrow(unit)),
             DataType::Time64(unit) => DataTypeRepr::Time64(TimeUnitRepr::from_arrow(unit)),
             DataType::Duration(unit) => DataTypeRepr::Duration(TimeUnitRepr::from_arrow(unit)),
@@ -173,9 +173,10 @@ impl DataTypeRepr {
             DataType::LargeList(field) => {
                 DataTypeRepr::LargeList(Box::new(SchemaField::from_arrow(field.as_ref())))
             }
-            DataType::FixedSizeList(field, size) => {
-                DataTypeRepr::FixedSizeList(Box::new(SchemaField::from_arrow(field.as_ref())), *size)
-            }
+            DataType::FixedSizeList(field, size) => DataTypeRepr::FixedSizeList(
+                Box::new(SchemaField::from_arrow(field.as_ref())),
+                *size,
+            ),
             DataType::Struct(fields) => {
                 let schema_fields: Vec<SchemaField> = fields
                     .iter()
@@ -213,7 +214,8 @@ impl DataTypeRepr {
             parse_struct,
             parse_map,
             parse_dictionary,
-        )).parse(input)
+        ))
+        .parse(input)
     }
 }
 
@@ -299,7 +301,8 @@ fn parse_simple_type(input: &str) -> IResult<&str, DataTypeRepr> {
         map(tag("Binary"), |_| DataTypeRepr::Binary),
         map(tag("Date32"), |_| DataTypeRepr::Date32),
         map(tag("Date64"), |_| DataTypeRepr::Date64),
-    )).parse(input)
+    ))
+    .parse(input)
 }
 
 fn parse_time_unit(input: &str) -> IResult<&str, TimeUnitRepr> {
@@ -308,7 +311,8 @@ fn parse_time_unit(input: &str) -> IResult<&str, TimeUnitRepr> {
         map(tag("Millisecond"), |_| TimeUnitRepr::Millisecond),
         map(tag("Microsecond"), |_| TimeUnitRepr::Microsecond),
         map(tag("Nanosecond"), |_| TimeUnitRepr::Nanosecond),
-    )).parse(input)
+    ))
+    .parse(input)
 }
 
 fn parse_interval_unit(input: &str) -> IResult<&str, IntervalUnitRepr> {
@@ -316,7 +320,8 @@ fn parse_interval_unit(input: &str) -> IResult<&str, IntervalUnitRepr> {
         map(tag("YearMonth"), |_| IntervalUnitRepr::YearMonth),
         map(tag("DayTime"), |_| IntervalUnitRepr::DayTime),
         map(tag("MonthDayNano"), |_| IntervalUnitRepr::MonthDayNano),
-    )).parse(input)
+    ))
+    .parse(input)
 }
 
 fn parse_timestamp(input: &str) -> IResult<&str, DataTypeRepr> {
@@ -329,35 +334,45 @@ fn parse_timestamp(input: &str) -> IResult<&str, DataTypeRepr> {
             ws(char(')')),
         ),
         |(_, _, unit, tz, _)| DataTypeRepr::Timestamp(unit, tz),
-    ).parse(input)
+    )
+    .parse(input)
 }
 
 fn parse_timezone(input: &str) -> IResult<&str, String> {
     map(
         delimited(char('"'), take_while1(|c| c != '"'), char('"')),
         |s: &str| s.to_string(),
-    ).parse(input)
+    )
+    .parse(input)
 }
 
 fn parse_time32(input: &str) -> IResult<&str, DataTypeRepr> {
     map(
         (tag("Time32"), ws(char('(')), parse_time_unit, ws(char(')'))),
         |(_, _, unit, _)| DataTypeRepr::Time32(unit),
-    ).parse(input)
+    )
+    .parse(input)
 }
 
 fn parse_time64(input: &str) -> IResult<&str, DataTypeRepr> {
     map(
         (tag("Time64"), ws(char('(')), parse_time_unit, ws(char(')'))),
         |(_, _, unit, _)| DataTypeRepr::Time64(unit),
-    ).parse(input)
+    )
+    .parse(input)
 }
 
 fn parse_duration(input: &str) -> IResult<&str, DataTypeRepr> {
     map(
-        (tag("Duration"), ws(char('(')), parse_time_unit, ws(char(')'))),
+        (
+            tag("Duration"),
+            ws(char('(')),
+            parse_time_unit,
+            ws(char(')')),
+        ),
         |(_, _, unit, _)| DataTypeRepr::Duration(unit),
-    ).parse(input)
+    )
+    .parse(input)
 }
 
 fn parse_interval(input: &str) -> IResult<&str, DataTypeRepr> {
@@ -369,7 +384,8 @@ fn parse_interval(input: &str) -> IResult<&str, DataTypeRepr> {
             ws(char(')')),
         ),
         |(_, _, unit, _)| DataTypeRepr::Interval(unit),
-    ).parse(input)
+    )
+    .parse(input)
 }
 
 fn parse_decimal128(input: &str) -> IResult<&str, DataTypeRepr> {
@@ -383,12 +399,10 @@ fn parse_decimal128(input: &str) -> IResult<&str, DataTypeRepr> {
             ws(char(')')),
         ),
         |(_, _, p, _, s, _)| {
-            DataTypeRepr::Decimal128(
-                p.parse().unwrap_or(38),
-                s.parse().unwrap_or(0),
-            )
+            DataTypeRepr::Decimal128(p.parse().unwrap_or(38), s.parse().unwrap_or(0))
         },
-    ).parse(input)
+    )
+    .parse(input)
 }
 
 fn parse_decimal256(input: &str) -> IResult<&str, DataTypeRepr> {
@@ -402,19 +416,18 @@ fn parse_decimal256(input: &str) -> IResult<&str, DataTypeRepr> {
             ws(char(')')),
         ),
         |(_, _, p, _, s, _)| {
-            DataTypeRepr::Decimal256(
-                p.parse().unwrap_or(76),
-                s.parse().unwrap_or(0),
-            )
+            DataTypeRepr::Decimal256(p.parse().unwrap_or(76), s.parse().unwrap_or(0))
         },
-    ).parse(input)
+    )
+    .parse(input)
 }
 
 fn parse_field_name(input: &str) -> IResult<&str, String> {
     map(
         take_while1(|c: char| c.is_alphanumeric() || c == '_'),
         |s: &str| s.to_string(),
-    ).parse(input)
+    )
+    .parse(input)
 }
 
 fn parse_field(input: &str) -> IResult<&str, SchemaField> {
@@ -430,26 +443,24 @@ fn parse_field(input: &str) -> IResult<&str, SchemaField> {
             data_type,
             nullable: nullable.is_some(),
         },
-    ).parse(input)
+    )
+    .parse(input)
 }
 
 fn parse_list(input: &str) -> IResult<&str, DataTypeRepr> {
     map(
         (tag("List"), ws(char('(')), parse_field, ws(char(')'))),
         |(_, _, field, _)| DataTypeRepr::List(Box::new(field)),
-    ).parse(input)
+    )
+    .parse(input)
 }
 
 fn parse_large_list(input: &str) -> IResult<&str, DataTypeRepr> {
     map(
-        (
-            tag("LargeList"),
-            ws(char('(')),
-            parse_field,
-            ws(char(')')),
-        ),
+        (tag("LargeList"), ws(char('(')), parse_field, ws(char(')'))),
         |(_, _, field, _)| DataTypeRepr::LargeList(Box::new(field)),
-    ).parse(input)
+    )
+    .parse(input)
 }
 
 fn parse_fixed_size_list(input: &str) -> IResult<&str, DataTypeRepr> {
@@ -465,7 +476,8 @@ fn parse_fixed_size_list(input: &str) -> IResult<&str, DataTypeRepr> {
         |(_, _, field, _, size, _)| {
             DataTypeRepr::FixedSizeList(Box::new(field), size.parse().unwrap_or(1))
         },
-    ).parse(input)
+    )
+    .parse(input)
 }
 
 fn parse_struct(input: &str) -> IResult<&str, DataTypeRepr> {
@@ -477,7 +489,8 @@ fn parse_struct(input: &str) -> IResult<&str, DataTypeRepr> {
             ws(char(')')),
         ),
         |(_, _, fields, _)| DataTypeRepr::Struct(fields),
-    ).parse(input)
+    )
+    .parse(input)
 }
 
 fn parse_map(input: &str) -> IResult<&str, DataTypeRepr> {
@@ -487,11 +500,15 @@ fn parse_map(input: &str) -> IResult<&str, DataTypeRepr> {
             ws(char('(')),
             parse_field,
             ws(char(',')),
-            alt((map(tag("sorted"), |_| true), map(tag("unsorted"), |_| false))),
+            alt((
+                map(tag("sorted"), |_| true),
+                map(tag("unsorted"), |_| false),
+            )),
             ws(char(')')),
         ),
         |(_, _, field, _, sorted, _)| DataTypeRepr::Map(Box::new(field), sorted),
-    ).parse(input)
+    )
+    .parse(input)
 }
 
 fn parse_dictionary(input: &str) -> IResult<&str, DataTypeRepr> {
@@ -504,17 +521,16 @@ fn parse_dictionary(input: &str) -> IResult<&str, DataTypeRepr> {
             DataTypeRepr::parse,
             ws(char(')')),
         ),
-        |(_, _, key, _, value, _)| {
-            DataTypeRepr::Dictionary(Box::new(key), Box::new(value))
-        },
-    ).parse(input)
+        |(_, _, key, _, value, _)| DataTypeRepr::Dictionary(Box::new(key), Box::new(value)),
+    )
+    .parse(input)
 }
 
 impl Schema {
     pub fn new(fields: Vec<SchemaField>) -> Self {
         Self { version: 1, fields }
     }
-    
+
     /// Convert Arrow schema to our Schema type
     pub fn from_arrow(arrow_schema: &ArrowSchema) -> Self {
         let fields = arrow_schema
@@ -522,21 +538,21 @@ impl Schema {
             .iter()
             .map(|field| SchemaField::from_arrow(field.as_ref()))
             .collect();
-        
+
         Self { version: 1, fields }
     }
-    
+
     pub fn to_arrow(&self) -> Arc<ArrowSchema> {
         let fields: Vec<Field> = self.fields.iter().map(|f| f.to_arrow()).collect();
         Arc::new(ArrowSchema::new(fields))
     }
-    
+
     /// Evolve the schema by adding a new field
     pub fn add_field(&mut self, field: SchemaField) {
         self.fields.push(field);
         self.version += 1;
     }
-    
+
     /// Find a field by name
     pub fn find_field(&self, name: &str) -> Option<&SchemaField> {
         self.fields.iter().find(|f| f.name == name)
@@ -552,44 +568,44 @@ impl SchemaManager {
     pub fn new<P: AsRef<Path>>(metadata_dir: P) -> Result<Self> {
         use std::fs;
         use tracing::info;
-        
+
         let metadata_dir = metadata_dir.as_ref().to_path_buf();
         fs::create_dir_all(&metadata_dir)?;
         info!("Schema manager initialized at {}", metadata_dir.display());
-        
+
         Ok(Self { metadata_dir })
     }
 
     pub fn write_schema(&self, schema: &Schema) -> Result<()> {
         use std::fs;
         use tracing::{debug, info};
-        
+
         let schema_path = self.metadata_dir.join("schema.json");
         let tmp_path = self.metadata_dir.join("schema.json.tmp");
-        
+
         debug!(
             "Writing schema version {} to {}",
             schema.version,
             schema_path.display()
         );
-        
+
         let json = serde_json::to_string_pretty(schema)?;
         fs::write(&tmp_path, &json)?;
         fs::rename(&tmp_path, &schema_path)?;
-        
+
         let history_path = self.metadata_dir.join("schema_history.json");
         let schema_version = SchemaVersion {
             version: schema.version,
             schema: schema.clone(),
         };
-        
+
         let mut history = if history_path.exists() {
             let content = fs::read_to_string(&history_path)?;
             serde_json::from_str::<Vec<SchemaVersion>>(&content)?
         } else {
             Vec::new()
         };
-        
+
         if !history.iter().any(|v| v.version == schema.version) {
             history.push(schema_version);
             let history_tmp = self.metadata_dir.join("schema_history.json.tmp");
@@ -597,7 +613,7 @@ impl SchemaManager {
             fs::write(&history_tmp, &history_json)?;
             fs::rename(&history_tmp, &history_path)?;
         }
-        
+
         info!("Successfully wrote schema version {}", schema.version);
         Ok(())
     }
@@ -605,36 +621,36 @@ impl SchemaManager {
     pub fn read_schema(&self) -> Result<Option<Schema>> {
         use std::fs;
         use tracing::debug;
-        
+
         let schema_path = self.metadata_dir.join("schema.json");
-        
+
         if !schema_path.exists() {
             return Ok(None);
         }
-        
+
         debug!("Reading schema from {}", schema_path.display());
-        
+
         let content = fs::read_to_string(&schema_path)?;
         let schema: Schema = serde_json::from_str(&content)?;
-        
+
         Ok(Some(schema))
     }
 
     pub fn read_history(&self) -> Result<Vec<SchemaVersion>> {
         use std::fs;
         use tracing::debug;
-        
+
         let history_path = self.metadata_dir.join("schema_history.json");
-        
+
         if !history_path.exists() {
             return Ok(Vec::new());
         }
-        
+
         debug!("Reading schema history from {}", history_path.display());
-        
+
         let content = fs::read_to_string(&history_path)?;
         let history: Vec<SchemaVersion> = serde_json::from_str(&content)?;
-        
+
         Ok(history)
     }
 }
@@ -643,17 +659,11 @@ impl SchemaManager {
 mod tests {
     use super::*;
     use tempfile::TempDir;
-    
+
     #[test]
     fn test_parse_simple_types() {
-        assert_eq!(
-            DataTypeRepr::parse("Int32").unwrap().1,
-            DataTypeRepr::Int32
-        );
-        assert_eq!(
-            DataTypeRepr::parse("Utf8").unwrap().1,
-            DataTypeRepr::Utf8
-        );
+        assert_eq!(DataTypeRepr::parse("Int32").unwrap().1, DataTypeRepr::Int32);
+        assert_eq!(DataTypeRepr::parse("Utf8").unwrap().1, DataTypeRepr::Utf8);
         assert_eq!(
             DataTypeRepr::parse("Boolean").unwrap().1,
             DataTypeRepr::Boolean
@@ -665,7 +675,9 @@ mod tests {
         let result = DataTypeRepr::parse("Timestamp(Microsecond, \"UTC\")");
         assert!(result.is_ok());
         let (_, dt) = result.unwrap();
-        assert!(matches!(dt, DataTypeRepr::Timestamp(TimeUnitRepr::Microsecond, Some(tz)) if tz == "UTC"));
+        assert!(
+            matches!(dt, DataTypeRepr::Timestamp(TimeUnitRepr::Microsecond, Some(tz)) if tz == "UTC")
+        );
     }
 
     #[test]
@@ -748,9 +760,9 @@ mod tests {
     #[test]
     fn test_schema_add_field() {
         let mut schema = Schema::new(vec![SchemaField {
-                name: "id".to_string(),
+            name: "id".to_string(),
             data_type: DataTypeRepr::Int64,
-                nullable: false,
+            nullable: false,
         }]);
 
         assert_eq!(schema.version, 1);

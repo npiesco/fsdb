@@ -2,12 +2,12 @@
 //! Supports local filesystem, S3, and other ObjectStore backends
 
 pub mod local;
-pub mod path;
 pub mod parquet;
+pub mod path;
 pub mod s3;
 
-use std::sync::Arc;
 use object_store::ObjectStore;
+use std::sync::Arc;
 
 /// Storage backend abstraction
 pub enum StorageBackend {
@@ -23,4 +23,3 @@ impl StorageBackend {
         }
     }
 }
-

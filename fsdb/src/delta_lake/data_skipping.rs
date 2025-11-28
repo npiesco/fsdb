@@ -5,9 +5,9 @@
 //! cannot contain matching data.
 
 use crate::Result;
-use std::path::Path;
 use std::collections::HashMap;
-use tracing::{info, debug};
+use std::path::Path;
+use tracing::{debug, info};
 
 /// Per-file statistics from Delta Lake transaction log
 #[derive(Debug, Clone)]
@@ -21,16 +21,16 @@ pub struct FileStats {
 }
 
 /// Extract per-file statistics from Delta Lake transaction log
-/// 
+///
 /// Reads all add actions from the transaction log and extracts min/max statistics
 /// for each Parquet file.
 pub fn get_file_statistics(base_path: &Path) -> Result<Vec<FileStats>> {
     let delta_log_path = base_path.join("_delta_log");
-    
+
     if !delta_log_path.exists() {
         return Ok(Vec::new());
     }
-    
+
     // Read all Delta Lake commit files
     let mut commit_files = Vec::new();
     for entry in std::fs::read_dir(&delta_log_path)? {
@@ -49,44 +49,41 @@ pub fn get_file_statistics(base_path: &Path) -> Result<Vec<FileStats>> {
             }
         }
     }
-    
+
     // Sort by version
     commit_files.sort_by_key(|(v, _)| *v);
-    
+
     // Track currently active files (path -> FileStats)
     // Need to handle remove actions too
     let mut active_files: HashMap<String, FileStats> = HashMap::new();
-    
+
     // Read stats from each commit file (JSONL format)
     for (_version, commit_path) in commit_files {
         let content = std::fs::read_to_string(&commit_path)?;
-        
+
         // Parse each line as JSON
         for line in content.lines() {
             if line.trim().is_empty() {
                 continue;
             }
-            
+
             if let Ok(json) = serde_json::from_str::<serde_json::Value>(line) {
                 // Look for "add" actions which contain file stats
                 if let Some(add) = json.get("add") {
-                    let path = add.get("path")
+                    let path = add
+                        .get("path")
                         .and_then(|p| p.as_str())
                         .unwrap_or("")
                         .to_string();
-                    
-                    let size_bytes = add.get("size")
-                        .and_then(|s| s.as_u64())
-                        .unwrap_or(0);
-                    
-                    let num_records = add.get("numRecords")
-                        .and_then(|n| n.as_u64())
-                        .unwrap_or(0);
-                    
+
+                    let size_bytes = add.get("size").and_then(|s| s.as_u64()).unwrap_or(0);
+
+                    let num_records = add.get("numRecords").and_then(|n| n.as_u64()).unwrap_or(0);
+
                     let mut min_values = HashMap::new();
                     let mut max_values = HashMap::new();
                     let mut null_counts = HashMap::new();
-                    
+
                     // Parse stats JSON (might be a string or object)
                     if let Some(stats) = add.get("stats") {
                         let stats_obj = if let Some(stats_str) = stats.as_str() {
@@ -96,7 +93,7 @@ pub fn get_file_statistics(base_path: &Path) -> Result<Vec<FileStats>> {
                             // Stats is already an object
                             Some(stats.clone())
                         };
-                        
+
                         if let Some(stats_json) = stats_obj {
                             // Extract minValues
                             if let Some(min_vals) = stats_json.get("minValues") {
@@ -106,7 +103,7 @@ pub fn get_file_statistics(base_path: &Path) -> Result<Vec<FileStats>> {
                                     }
                                 }
                             }
-                            
+
                             // Extract maxValues
                             if let Some(max_vals) = stats_json.get("maxValues") {
                                 if let Some(max_obj) = max_vals.as_object() {
@@ -115,7 +112,7 @@ pub fn get_file_statistics(base_path: &Path) -> Result<Vec<FileStats>> {
                                     }
                                 }
                             }
-                            
+
                             // Extract nullCount
                             if let Some(null_cnts) = stats_json.get("nullCount") {
                                 if let Some(null_obj) = null_cnts.as_object() {
@@ -128,7 +125,7 @@ pub fn get_file_statistics(base_path: &Path) -> Result<Vec<FileStats>> {
                             }
                         }
                     }
-                    
+
                     let file_stats = FileStats {
                         path: path.clone(),
                         size_bytes,
@@ -137,10 +134,10 @@ pub fn get_file_statistics(base_path: &Path) -> Result<Vec<FileStats>> {
                         null_counts,
                         num_records,
                     };
-                    
+
                     active_files.insert(path, file_stats);
                 }
-                
+
                 // Look for "remove" actions to handle deleted files
                 if let Some(remove) = json.get("remove") {
                     if let Some(path) = remove.get("path").and_then(|p| p.as_str()) {
@@ -150,28 +147,36 @@ pub fn get_file_statistics(base_path: &Path) -> Result<Vec<FileStats>> {
             }
         }
     }
-    
-    debug!("Extracted statistics for {} active files", active_files.len());
+
+    debug!(
+        "Extracted statistics for {} active files",
+        active_files.len()
+    );
     Ok(active_files.into_values().collect())
 }
 
 /// Evaluate if a file can be skipped based on a predicate
-/// 
+///
 /// Returns true if the file can definitely be skipped (doesn't contain matching data).
 /// Returns false if the file might contain matching data (needs to be read).
-pub fn can_skip_file(file_stats: &FileStats, column: &str, operator: &str, value: &serde_json::Value) -> bool {
+pub fn can_skip_file(
+    file_stats: &FileStats,
+    column: &str,
+    operator: &str,
+    value: &serde_json::Value,
+) -> bool {
     // Get min/max for the column
     let min_val = file_stats.min_values.get(column);
     let max_val = file_stats.max_values.get(column);
-    
+
     if min_val.is_none() || max_val.is_none() {
         // No statistics available, cannot skip
         return false;
     }
-    
+
     let min_val = min_val.unwrap();
     let max_val = max_val.unwrap();
-    
+
     // Evaluate predicate against file statistics
     match operator {
         ">" => {
@@ -213,9 +218,7 @@ fn is_value_less_than(a: &serde_json::Value, b: &serde_json::Value) -> bool {
                 false
             }
         }
-        (serde_json::Value::String(a_str), serde_json::Value::String(b_str)) => {
-            a_str < b_str
-        }
+        (serde_json::Value::String(a_str), serde_json::Value::String(b_str)) => a_str < b_str,
         _ => false,
     }
 }
@@ -232,43 +235,41 @@ fn is_value_greater_than(a: &serde_json::Value, b: &serde_json::Value) -> bool {
                 false
             }
         }
-        (serde_json::Value::String(a_str), serde_json::Value::String(b_str)) => {
-            a_str > b_str
-        }
+        (serde_json::Value::String(a_str), serde_json::Value::String(b_str)) => a_str > b_str,
         _ => false,
     }
 }
 
 /// Parse SQL query to extract simple predicates
-/// 
+///
 /// This is a simple parser that extracts basic WHERE conditions like:
 /// - age > 55
 /// - value >= 210 AND value <= 290
 /// - category >= 'W'
 pub fn extract_predicates(sql: &str) -> Vec<(String, String, serde_json::Value)> {
     let mut predicates = Vec::new();
-    
+
     // Find WHERE clause
     let sql_upper = sql.to_uppercase();
     if let Some(where_idx) = sql_upper.find("WHERE") {
         let where_clause = &sql[where_idx + 5..];
-        
+
         // Split by AND/OR (simple approach)
         let parts: Vec<&str> = where_clause.split("AND").collect();
-        
+
         for part in parts {
             let part = part.trim();
-            
+
             // Try to match: column operator value
             // Support: >, >=, <, <=, =
             for op in &[">=", "<=", ">", "<", "="] {
                 if let Some(op_idx) = part.find(op) {
                     let column = part[..op_idx].trim().to_string();
                     let value_str = part[op_idx + op.len()..].trim();
-                    
+
                     // Remove ORDER BY, LIMIT, etc.
                     let value_str = value_str.split_whitespace().next().unwrap_or(value_str);
-                    
+
                     // Parse value (int, float, or string)
                     let value = if value_str.starts_with('\'') || value_str.starts_with('"') {
                         // String value
@@ -283,14 +284,14 @@ pub fn extract_predicates(sql: &str) -> Vec<(String, String, serde_json::Value)>
                     } else {
                         continue;
                     };
-                    
+
                     predicates.push((column, op.to_string(), value));
                     break; // Found operator, don't try others
                 }
             }
         }
     }
-    
+
     info!("Extracted {} predicates from query", predicates.len());
     predicates
 }
@@ -298,7 +299,7 @@ pub fn extract_predicates(sql: &str) -> Vec<(String, String, serde_json::Value)>
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_predicate_extraction() {
         let sql = "SELECT * FROM data WHERE age > 55";
@@ -308,14 +309,14 @@ mod tests {
         assert_eq!(predicates[0].1, ">");
         assert_eq!(predicates[0].2, serde_json::json!(55));
     }
-    
+
     #[test]
     fn test_range_predicate_extraction() {
         let sql = "SELECT * FROM data WHERE value >= 210 AND value <= 290";
         let predicates = extract_predicates(sql);
         assert_eq!(predicates.len(), 2);
     }
-    
+
     #[test]
     fn test_string_predicate_extraction() {
         let sql = "SELECT * FROM data WHERE category >= 'W'";
@@ -326,4 +327,3 @@ mod tests {
         assert_eq!(predicates[0].2, serde_json::Value::String("W".to_string()));
     }
 }
-
