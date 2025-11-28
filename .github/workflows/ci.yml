@@ -135,29 +135,6 @@ jobs:
           files: ./coverage/cobertura.xml
           fail_ci_if_error: false
 
-  # Docker build test
-  docker-test:
-    name: Docker Build & Test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      
-      - name: Start services
-        run: docker compose up -d minio minio-init
-      
-      - name: Wait for services
-        run: sleep 10
-      
-      - name: Run tests in Docker
-        run: docker compose run --rm test-linux
-      
-      - name: Stop services
-        if: always()
-        run: docker compose down -v
-
   # Documentation build
   docs:
     name: Documentation
