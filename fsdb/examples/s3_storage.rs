@@ -11,7 +11,6 @@ use arrow::array::{ArrayRef, Int32Array, RecordBatch, StringArray};
 use arrow::datatypes::{DataType, Field, Schema};
 use fsdb::DatabaseOps;
 use std::sync::Arc;
-use tokio;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -135,11 +134,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("   List databases:");
     println!("     docker compose exec minio sh -c \"mc alias set myminio http://localhost:9000 minioadmin minioadmin\"");
     println!("     docker compose exec minio sh -c \"mc ls myminio/fsdb-test/\"");
-    println!("");
+    println!();
     println!("   View Delta Lake transaction log:");
     println!("     docker compose exec minio sh -c \"mc ls myminio/fsdb-test/s3_example_db/_delta_log/\"");
     println!("     docker compose exec minio sh -c \"mc cat myminio/fsdb-test/s3_example_db/_delta_log/00000000000000000000.json\"");
-    println!("");
+    println!();
     println!("   List Parquet data files:");
     println!("     docker compose exec minio sh -c \"mc ls myminio/fsdb-test/s3_example_db/\"");
 

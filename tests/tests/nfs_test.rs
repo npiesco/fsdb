@@ -6,7 +6,7 @@ use arrow::datatypes::{DataType, Field, Schema};
 use fsdb::DatabaseOps;
 use fsdb::nfs::NfsServer;
 use serial_test::serial;
-use std::path::PathBuf;
+use std::path::Path;
 use std::sync::Arc;
 use std::sync::Once;
 use tempfile::TempDir;
@@ -332,7 +332,7 @@ async fn test_nfs_file_attributes() {
 
 /// Helper to mount NFS using OS command
 /// Requires passwordless sudo (configured via scripts/setup_nfs_sudo.py)
-async fn mount_nfs_os(host: &str, port: u16, mount_point: &PathBuf) -> Result<(), String> {
+async fn mount_nfs_os(host: &str, port: u16, mount_point: &Path) -> Result<(), String> {
     // Check if we're running as root
     #[cfg(unix)]
     let is_root = unsafe { libc::geteuid() } == 0;
@@ -464,7 +464,7 @@ async fn mount_nfs_os(host: &str, port: u16, mount_point: &PathBuf) -> Result<()
 
 /// Helper to unmount NFS using OS command
 /// Runs as root if possible, otherwise uses passwordless sudo (configured via scripts/setup_nfs_sudo.py)
-async fn unmount_nfs_os(mount_point: &PathBuf) -> Result<(), String> {
+async fn unmount_nfs_os(mount_point: &Path) -> Result<(), String> {
     // Check if we're running as root
     #[cfg(unix)]
     let is_root = unsafe { libc::geteuid() } == 0;
@@ -1648,7 +1648,7 @@ async fn test_nfs_concurrent_readers_and_writer() {
                         .arg(&path)
                         .output()
                         .await
-                        .expect(&format!("Reader {} should succeed", i));
+                        .unwrap_or_else(|_| panic!("Reader {} should succeed", i));
                     assert!(output.status.success());
                     tokio::time::sleep(Duration::from_millis(10)).await;
                 }
@@ -3049,7 +3049,7 @@ async fn test_large_dataset_row_deletion() {
                     .next()
                     .and_then(|s| s.parse().ok())
                     .unwrap_or(-1);
-                id < 5000 || id >= 5100
+                !(5000..5100).contains(&id)
             }
         })
         .collect::<Vec<&str>>()
@@ -3109,7 +3109,7 @@ async fn test_large_dataset_row_deletion() {
                     .next()
                     .and_then(|s| s.parse().ok())
                     .unwrap_or(-1);
-                id < 1000 || id >= 2000
+                !(1000..2000).contains(&id)
             }
         })
         .collect::<Vec<&str>>()
@@ -3456,7 +3456,7 @@ async fn test_stress_100k_rows() {
                     .next()
                     .and_then(|s| s.parse().ok())
                     .unwrap_or(-1);
-                id < 50000 || id >= 51000
+                !(50000..51000).contains(&id)
             }
         })
         .collect::<Vec<&str>>()
@@ -3505,7 +3505,7 @@ async fn test_stress_100k_rows() {
                     .next()
                     .and_then(|s| s.parse().ok())
                     .unwrap_or(-1);
-                id < 10000 || id >= 20000
+                !(10000..20000).contains(&id)
             }
         })
         .collect::<Vec<&str>>()
@@ -3689,7 +3689,7 @@ async fn test_stress_1m_rows() {
                     .next()
                     .and_then(|s| s.parse().ok())
                     .unwrap_or(-1);
-                id < 500000 || id >= 510000
+                !(500000..510000).contains(&id)
             }
         })
         .collect::<Vec<&str>>()
@@ -3847,7 +3847,7 @@ async fn test_stress_large_batch_delete() {
                     .next()
                     .and_then(|s| s.parse().ok())
                     .unwrap_or(-1);
-                id < 25000 || id >= 75000
+                !(25000..75000).contains(&id)
             }
         })
         .collect::<Vec<&str>>()
@@ -4046,7 +4046,7 @@ async fn test_1gb_csv_stress() {
         .unwrap()
         .value(0);
     assert_eq!(
-        initial_count, target_rows as i64,
+        initial_count, target_rows,
         "Should have {} rows initially",
         target_rows
     );
@@ -4104,7 +4104,7 @@ async fn test_1gb_csv_stress() {
                     .next()
                     .and_then(|s| s.parse().ok())
                     .unwrap_or(-1);
-                id < 15_000_000 || id >= 15_010_000
+                !(15_000_000..15_010_000).contains(&id)
             }
         })
         .collect::<Vec<&str>>()
@@ -4160,7 +4160,7 @@ async fn test_1gb_csv_stress() {
         .value(0);
     assert_eq!(
         final_count,
-        (target_rows - 10_000) as i64,
+        target_rows - 10_000,
         "Should have {} rows after deletion",
         target_rows - 10_000
     );

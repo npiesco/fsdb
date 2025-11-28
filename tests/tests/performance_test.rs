@@ -1,11 +1,9 @@
 use arrow::array::{ArrayRef, Int32Array, RecordBatch, StringArray};
 use arrow::datatypes::{DataType, Field, Schema, SchemaRef};
 use fsdb::DatabaseOps;
-use parquet;
 use std::fs;
 use std::sync::Arc;
 use std::time::Instant;
-use tracing_subscriber;
 
 fn setup_logging() {
     let _ = tracing_subscriber::fmt()
@@ -79,18 +77,16 @@ async fn test_sequential_write_performance() {
         let mut delta_log_size = 0u64;
 
         if let Ok(entries) = fs::read_dir(db_path) {
-            for entry in entries {
-                if let Ok(entry) = entry {
-                    let path = entry.path();
-                    if let Ok(metadata) = entry.metadata() {
-                        let size = metadata.len();
-                        if path.is_file()
-                            && path.extension().and_then(|s| s.to_str()) == Some("parquet")
-                        {
-                            parquet_size += size;
-                        } else if path.file_name().and_then(|s| s.to_str()) == Some("_delta_log") {
-                            delta_log_size += get_directory_size(path.to_str().unwrap());
-                        }
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if let Ok(metadata) = entry.metadata() {
+                    let size = metadata.len();
+                    if path.is_file()
+                        && path.extension().and_then(|s| s.to_str()) == Some("parquet")
+                    {
+                        parquet_size += size;
+                    } else if path.file_name().and_then(|s| s.to_str()) == Some("_delta_log") {
+                        delta_log_size += get_directory_size(path.to_str().unwrap());
                     }
                 }
             }
@@ -459,12 +455,11 @@ async fn test_fsdb_vs_direct_parquet_comparison() {
     let mut total_count = 0usize;
     for entry in &parquet_files {
         let file_path = entry.path();
-        if let Ok(file) = File::open(&file_path) {
-            if let Ok(builder) =
+        if let Ok(file) = File::open(&file_path)
+            && let Ok(builder) =
                 parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder::try_new(file)
-            {
-                total_count += builder.metadata().file_metadata().num_rows() as usize;
-            }
+        {
+            total_count += builder.metadata().file_metadata().num_rows() as usize;
         }
     }
     let direct_count_latency = start.elapsed();
@@ -479,17 +474,13 @@ async fn test_fsdb_vs_direct_parquet_comparison() {
     let mut rows_read = 0usize;
     for entry in &parquet_files {
         let file_path = entry.path();
-        if let Ok(file) = File::open(&file_path) {
-            if let Ok(builder) =
+        if let Ok(file) = File::open(&file_path)
+            && let Ok(builder) =
                 parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder::try_new(file)
-            {
-                if let Ok(reader) = builder.build() {
-                    for batch_result in reader {
-                        if let Ok(batch) = batch_result {
-                            rows_read += batch.num_rows();
-                        }
-                    }
-                }
+            && let Ok(reader) = builder.build()
+        {
+            for batch in reader.flatten() {
+                rows_read += batch.num_rows();
             }
         }
     }
@@ -505,32 +496,26 @@ async fn test_fsdb_vs_direct_parquet_comparison() {
     let mut filtered_rows = 0usize;
     for entry in &parquet_files {
         let file_path = entry.path();
-        if let Ok(file) = File::open(&file_path) {
-            if let Ok(builder) =
+        if let Ok(file) = File::open(&file_path)
+            && let Ok(builder) =
                 parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder::try_new(file)
-            {
-                if let Ok(reader) = builder.build() {
-                    for batch_result in reader {
-                        if let Ok(batch) = batch_result {
-                            // Get id column and filter
-                            if let Some(id_array) =
-                                batch.column(0).as_any().downcast_ref::<Int32Array>()
-                            {
-                                for i in 0..id_array.len() {
-                                    let id = id_array.value(i);
-                                    if id >= 1000 && id < 2000 {
-                                        filtered_rows += 1;
-                                        if filtered_rows >= 100 {
-                                            break;
-                                        }
-                                    }
-                                }
+            && let Ok(reader) = builder.build()
+        {
+            for batch in reader.flatten() {
+                // Get id column and filter
+                if let Some(id_array) = batch.column(0).as_any().downcast_ref::<Int32Array>() {
+                    for i in 0..id_array.len() {
+                        let id = id_array.value(i);
+                        if (1000..2000).contains(&id) {
+                            filtered_rows += 1;
+                            if filtered_rows >= 100 {
+                                break;
                             }
                         }
-                        if filtered_rows >= 100 {
-                            break;
-                        }
                     }
+                }
+                if filtered_rows >= 100 {
+                    break;
                 }
             }
         }
@@ -593,15 +578,14 @@ fn get_current_memory_usage() -> u64 {
 
     // Use ps command to get RSS in bytes
     let output = Command::new("ps")
-        .args(&["-o", "rss=", "-p", &std::process::id().to_string()])
+        .args(["-o", "rss=", "-p", &std::process::id().to_string()])
         .output();
 
-    if let Ok(output) = output {
-        if let Ok(rss_str) = String::from_utf8(output.stdout) {
-            if let Ok(kb) = rss_str.trim().parse::<u64>() {
-                return kb * 1024; // Convert KB to bytes
-            }
-        }
+    if let Ok(output) = output
+        && let Ok(rss_str) = String::from_utf8(output.stdout)
+        && let Ok(kb) = rss_str.trim().parse::<u64>()
+    {
+        return kb * 1024; // Convert KB to bytes
     }
     0
 }

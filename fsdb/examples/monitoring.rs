@@ -12,7 +12,6 @@ use arrow::datatypes::{DataType, Field, Schema};
 use fsdb::DatabaseOps;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -202,12 +201,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("     • Expose /metrics endpoint: get_metrics()");
     println!("     • Track query performance over time");
     println!("     • Alert on high error rates");
-    println!("");
+    println!();
     println!("   Performance Tuning:");
     println!("     • Identify slow queries (max_query_latency_ms)");
     println!("     • Monitor insert throughput (total_inserts / uptime)");
     println!("     • Track database growth (total_size_bytes)");
-    println!("");
+    println!();
     println!("   Capacity Planning:");
     println!("     • Database size trends (health_check.total_size_bytes)");
     println!("     • File count growth (health_check.total_files)");
@@ -239,7 +238,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  • Health check API for monitoring tools");
     println!("  • Metrics reset for testing/development");
     println!("  • Enterprise-grade observability");
-    println!("");
+    println!();
     println!("Available Metrics:");
     println!("  • total_queries: Total SELECT operations");
     println!("  • total_inserts: Total INSERT operations");

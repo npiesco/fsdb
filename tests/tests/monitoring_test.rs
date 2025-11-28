@@ -3,7 +3,6 @@ use arrow::datatypes::{DataType, Field, Schema};
 use fsdb::DatabaseOps;
 use std::fs;
 use std::sync::Arc;
-use tracing_subscriber;
 
 fn setup_logging() {
     let _ = tracing_subscriber::fmt()

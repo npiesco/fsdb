@@ -43,7 +43,7 @@ async fn test_create_fsdb_with_delta_native_mode() {
     let delta_log_dir = std::fs::read_dir(db_path.join("_delta_log")).unwrap();
     let log_files: Vec<_> = delta_log_dir.collect();
     assert!(
-        log_files.len() > 0,
+        !log_files.is_empty(),
         "Delta Lake transaction log should have at least one file"
     );
 
@@ -196,7 +196,7 @@ async fn test_delta_native_transaction_commit() {
         .unwrap()
         .collect();
     assert!(
-        delta_log_files.len() > 0,
+        !delta_log_files.is_empty(),
         "Should have Delta Lake transaction log files"
     );
 }

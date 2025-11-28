@@ -11,7 +11,6 @@ use arrow::array::{ArrayRef, Int32Array, RecordBatch, StringArray};
 use arrow::datatypes::{DataType, Field, Schema};
 use fsdb::DatabaseOps;
 use std::sync::Arc;
-use tokio;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -195,12 +194,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  • Permission enforcement at database layer");
     println!("  • Comprehensive audit logging for compliance");
     println!("  • System access for administrative operations");
-    println!("");
+    println!();
     println!("Default Roles:");
     println!("  admin   : Read, Write, Delete, Admin, Backup, Restore");
     println!("  write   : Read, Write");
     println!("  read    : Read");
-    println!("");
+    println!();
     println!("Audit Log Captures:");
     println!("  • User authentication attempts");
     println!("  • Successful operations (INSERT, SELECT, DELETE)");

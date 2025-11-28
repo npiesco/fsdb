@@ -11,7 +11,6 @@ use arrow::array::{ArrayRef, Int32Array, RecordBatch, StringArray};
 use arrow::datatypes::{DataType, Field, Schema};
 use fsdb::DatabaseOps;
 use std::sync::Arc;
-use tokio;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -158,12 +157,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("     • Full backup before major changes");
     println!("     • Restore entire database from backup");
     println!("     • Business continuity ensured");
-    println!("");
+    println!();
     println!("   Scenario 2: Regulatory Compliance");
     println!("     • Point-in-time recovery to specific transaction");
     println!("     • Audit trail through transaction log");
     println!("     • Historical data reconstruction");
-    println!("");
+    println!();
     println!("   Scenario 3: Incremental Backups");
     println!("     • Daily full backups (large)");
     println!("     • Hourly incremental backups (small)");

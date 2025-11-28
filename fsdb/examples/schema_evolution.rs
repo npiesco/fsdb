@@ -12,7 +12,6 @@ use fsdb::metadata::schema::DataTypeRepr;
 use fsdb::metadata::{Schema as FsdbSchema, SchemaField, SchemaManager};
 use fsdb::DatabaseOps;
 use std::sync::Arc;
-use tokio;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

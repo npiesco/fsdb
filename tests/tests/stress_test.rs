@@ -4,7 +4,6 @@ use fsdb::DatabaseOps;
 use std::fs;
 use std::sync::Arc;
 use std::time::Instant;
-use tracing_subscriber;
 
 fn setup_logging() {
     let _ = tracing_subscriber::fmt()
