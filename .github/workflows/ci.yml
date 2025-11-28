@@ -165,3 +165,86 @@ jobs:
       - name: Build documentation
         run: cargo doc --no-deps --workspace --verbose
 
+  # Publish Python bindings to PyPI (only on main branch)
+  publish-python:
+    name: Publish Python Bindings
+    runs-on: ${{ matrix.os }}
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: [fmt, clippy, test-unit, test-integration]
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            lib: libfsdb.so
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            lib: libfsdb.dylib
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            lib: libfsdb.dylib
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install Python dependencies
+        run: |
+          pip install setuptools wheel twine uniffi-bindgen
+      
+      - name: Build Rust library
+        run: |
+          cd fsdb
+          cargo build --release --lib --target ${{ matrix.target }}
+      
+      - name: Generate UniFFI bindings
+        run: |
+          cd fsdb
+          cargo run --bin uniffi-bindgen -- generate \
+            --library target/${{ matrix.target }}/release/${{ matrix.lib }} \
+            --language python \
+            --out-dir ../bindings/python
+      
+      - name: Copy library to bindings
+        run: |
+          cp fsdb/target/${{ matrix.target }}/release/${{ matrix.lib }} bindings/python/
+      
+      - name: Update version
+        run: |
+          cd bindings/python
+          # Auto-increment patch version
+          python -c "
+          import re
+          with open('setup.py', 'r') as f:
+              content = f.read()
+          match = re.search(r'version=\"(\d+)\.(\d+)\.(\d+)\"', content)
+          if match:
+              major, minor, patch = match.groups()
+              new_version = f'{major}.{minor}.{int(patch) + 1}'
+              content = re.sub(r'version=\"\d+\.\d+\.\d+\"', f'version=\"{new_version}\"', content)
+              with open('setup.py', 'w') as f:
+                  f.write(content)
+              print(f'Updated to version {new_version}')
+          "
+      
+      - name: Build Python wheel
+        run: |
+          cd bindings/python
+          python setup.py sdist bdist_wheel
+      
+      - name: Publish to PyPI
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        run: |
+          cd bindings/python
+          twine upload dist/* --skip-existing
+

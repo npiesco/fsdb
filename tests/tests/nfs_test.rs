@@ -3540,3 +3540,157 @@ async fn test_1gb_csv_stress() {
     println!("[CLEANUP] Shutting down");
     server.shutdown().await.unwrap();
 }
+
+#[tokio::test]
+#[serial]
+async fn test_nfs_mkdir_creates_directory() {
+    init_logging();
+    println!("\n[TEST] test_nfs_mkdir_creates_directory");
+    
+    // TDD: Write the test, run it and watch it fail
+    // Expected behavior: mkdir command should create a directory in the NFS mount
+    
+    require_mount_capability();
+    
+    let temp_dir = TempDir::new().unwrap();
+    let db_path = temp_dir.path().join("test_db");
+    let mount_point = temp_dir.path().join("mnt");
+    std::fs::create_dir(&mount_point).unwrap();
+    
+    let schema = Arc::new(Schema::new(vec![
+        Field::new("id", DataType::Int32, false),
+        Field::new("name", DataType::Utf8, false),
+    ]));
+    
+    let db = DatabaseOps::create(&db_path, schema).await.unwrap();
+    
+    let port = create_unique_port(12049);
+    let server = fsdb::nfs::NfsServer::new(Arc::new(db), port).await.unwrap();
+    
+    println!("[MOUNT] Mounting NFS at {:?} on port {}", mount_point, port);
+    mount_nfs_os("localhost", port, &mount_point).await
+        .expect("NFS mount must succeed");
+    
+    println!("[TEST] Testing 'mkdir' command to create directory 'testdir'");
+    let test_dir = mount_point.join("testdir");
+    
+    // TDD: This should fail because mkdir is not implemented yet
+    let output = tokio::process::Command::new("mkdir")
+        .arg(&test_dir)
+        .output()
+        .await
+        .expect("Failed to execute mkdir");
+    
+    // TDD: This assertion will fail until mkdir is implemented
+    assert!(output.status.success(), 
+        "mkdir should succeed. stderr: {}", 
+        String::from_utf8_lossy(&output.stderr));
+    
+    println!("[VERIFY] Checking directory was created");
+    // Verify directory exists by listing parent directory
+    let output = tokio::process::Command::new("ls")
+        .arg("-la")
+        .arg(&mount_point)
+        .output()
+        .await
+        .expect("Failed to execute ls");
+    
+    let listing = String::from_utf8_lossy(&output.stdout);
+    println!("  Directory listing: {}", listing);
+    assert!(listing.contains("testdir"), "Directory 'testdir' should exist");
+    
+    // Verify it's actually a directory
+    let metadata = std::fs::metadata(&test_dir);
+    assert!(metadata.is_ok(), "Directory should exist");
+    assert!(metadata.unwrap().is_dir(), "testdir should be a directory");
+    
+    println!("[SUCCESS] mkdir command successfully created directory!");
+    
+    unmount_nfs_os(&mount_point).await.expect("Unmount must succeed");
+    server.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+#[serial]
+async fn test_nfs_cp_creates_file() {
+    init_logging();
+    println!("\n[TEST] test_nfs_cp_creates_file");
+    
+    // TDD: Write the test, run it and watch it fail
+    // Expected behavior: cp command should create a new file in the NFS mount
+    
+    require_mount_capability();
+    
+    let temp_dir = TempDir::new().unwrap();
+    let db_path = temp_dir.path().join("test_db");
+    let mount_point = temp_dir.path().join("mnt");
+    std::fs::create_dir(&mount_point).unwrap();
+    
+    let schema = Arc::new(Schema::new(vec![
+        Field::new("id", DataType::Int32, false),
+        Field::new("name", DataType::Utf8, false),
+    ]));
+    
+    let db = DatabaseOps::create(&db_path, schema).await.unwrap();
+    
+    let port = create_unique_port(12049);
+    // new() already waits for server readiness with event-based channel (see mod.rs:94-113)
+    let server = fsdb::nfs::NfsServer::new(Arc::new(db), port).await.unwrap();
+    
+    println!("[MOUNT] Mounting NFS at {:?} on port {}", mount_point, port);
+    mount_nfs_os("localhost", port, &mount_point).await
+        .expect("NFS mount must succeed");
+    
+    // Create a source file locally
+    let source_file = temp_dir.path().join("source.txt");
+    std::fs::write(&source_file, "Hello, World!").unwrap();
+    
+    println!("[TEST] Testing 'cp' command to copy file to NFS mount");
+    let dest_file = mount_point.join("copied.txt");
+    
+    // TDD: This should fail because create is not implemented yet
+    let output = tokio::process::Command::new("cp")
+        .arg(&source_file)
+        .arg(&dest_file)
+        .output()
+        .await
+        .expect("Failed to execute cp");
+    
+    // TDD: This assertion will fail until create is implemented
+    assert!(output.status.success(), 
+        "cp should succeed. stderr: {}", 
+        String::from_utf8_lossy(&output.stderr));
+    
+    println!("[VERIFY] Checking file was created");
+    
+    // Add timeout wrapper for filesystem operations that might hang on unresponsive mount
+    let verify_result = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        async {
+            // Verify file exists
+            let metadata = tokio::fs::metadata(&dest_file).await?;
+            assert!(metadata.is_file(), "copied.txt should be a file");
+            
+            // Verify content matches
+            let content = tokio::fs::read_to_string(&dest_file).await?;
+            assert_eq!(content, "Hello, World!", "File content should match");
+            
+            Ok::<(), std::io::Error>(())
+        }
+    ).await;
+    
+    match verify_result {
+        Ok(Ok(())) => {
+            println!("[SUCCESS] cp command successfully created file!");
+        }
+        Ok(Err(e)) => {
+            panic!("File verification failed: {}", e);
+        }
+        Err(_) => {
+            panic!("File verification timed out - mount may be unresponsive. Check: mount | grep nfs");
+        }
+    }
+    
+    unmount_nfs_os(&mount_point).await.expect("Unmount must succeed");
+    server.shutdown().await.unwrap();
+}
