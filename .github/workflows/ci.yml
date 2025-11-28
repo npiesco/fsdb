@@ -198,9 +198,15 @@ jobs:
           "
       
       - name: Build Python wheel
+        shell: bash
         run: |
           cd bindings/python
-          python setup.py sdist bdist_wheel
+          # Only build sdist on Linux to avoid duplicate uploads
+          if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
+            python setup.py sdist bdist_wheel
+          else
+            python setup.py bdist_wheel
+          fi
       
       - name: Publish to PyPI
         env:
