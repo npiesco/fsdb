@@ -73,23 +73,23 @@ jobs:
   test-integration:
     name: Integration Tests (Docker + MinIO)
     runs-on: ubuntu-latest
-    services:
-      minio:
-        image: minio/minio:latest
-        ports:
-          - 9000:9000
-          - 9001:9001
-        env:
-          MINIO_ROOT_USER: minioadmin
-          MINIO_ROOT_PASSWORD: minioadmin
-        options: >-
-          --health-cmd "curl -f http://localhost:9000/minio/health/live"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 3
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      
+      - name: Start MinIO
+        run: |
+          docker run -d \
+            --name minio \
+            -p 9000:9000 \
+            -p 9001:9001 \
+            -e MINIO_ROOT_USER=minioadmin \
+            -e MINIO_ROOT_PASSWORD=minioadmin \
+            minio/minio:latest \
+            server /data --console-address ":9001"
+          
+          # Wait for MinIO to be ready
+          timeout 30 bash -c 'until curl -f http://localhost:9000/minio/health/live; do sleep 1; done'
       
       - name: Setup MinIO bucket
         run: |
@@ -110,6 +110,10 @@ jobs:
       
       - name: Run concurrent tests
         run: cargo test --test concurrent_test --verbose
+      
+      - name: Stop MinIO
+        if: always()
+        run: docker stop minio && docker rm minio
 
   # Code coverage
   coverage:
