@@ -172,19 +172,21 @@ jobs:
           cargo run --bin uniffi-bindgen -- generate \
             --library ../target/${{ matrix.target }}/release/${{ matrix.lib }} \
             --language python \
-            --out-dir ../bindings/python
+            --out-dir ../bindings/python/fsdb
       
       - name: Copy library to bindings
         shell: bash
         run: |
-          cp target/${{ matrix.target }}/release/${{ matrix.lib }} bindings/python/
-          ls -la bindings/python/
+          # Copy to fsdb package directory
+          cp target/${{ matrix.target }}/release/${{ matrix.lib }} bindings/python/fsdb/
+          echo "Contents of bindings/python/fsdb/:"
+          ls -lh bindings/python/fsdb/
           # Verify library was copied
-          if [ ! -f "bindings/python/${{ matrix.lib }}" ]; then
-            echo "Error: Library file not found in bindings/python/"
+          if [ ! -f "bindings/python/fsdb/${{ matrix.lib }}" ]; then
+            echo "Error: Library file not found in bindings/python/fsdb/"
             exit 1
           fi
-          echo "✓ Library file copied successfully"
+          echo "✓ Library file copied to fsdb package directory"
       
       - name: Update version
         run: |
