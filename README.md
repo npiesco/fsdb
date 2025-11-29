@@ -336,19 +336,23 @@ cargo build --release
 #### Python Bindings
 
 ```bash
-# Install from PyPI (recommended)
+# Install from PyPI (recommended - requires Python 3.11+)
 pip install fsdb-py
 
-# Or build from source
+# Or build from source (supports Python 3.8+)
 cd fsdb
 cargo build --release
 cargo run --bin uniffi-bindgen -- generate \
     --library target/release/libfsdb.dylib \
     --language python \
-    --out-dir ../bindings/python
-cp target/release/libfsdb.dylib ../bindings/python/
+    --out-dir ../bindings/python/fsdb
+cp target/release/libfsdb.dylib ../bindings/python/fsdb/
 pip install -e ../bindings/python/
 ```
+
+**Requirements:**
+- **Python 3.11+** for prebuilt wheels with native library
+- Python 3.8+ for building from source
 
 **PyPI Package:** https://pypi.org/project/fsdb-py/
 
@@ -723,12 +727,13 @@ For detailed testing documentation, see [tests/POSIX_TEST_SETUP.md](tests/POSIX_
 
 ### Python Bindings
 
-- **UniFFI-generated** bindings for Python 3.8+
+- **UniFFI-generated** bindings for Python 3.8+ (3.11+ recommended for PyPI wheels)
 - **Full API Coverage**: All core features accessible from Python including MERGE
 - **NFS Server Support**: Mount Delta Lake as filesystem from Python
 - **Type Safety**: Complete type hints and error handling
 - **Zero-Copy Operations**: Efficient Rust-Python interop
 - **Robust**: Comprehensive error handling and async support
+- **PyPI Available**: `pip install fsdb-py` (Python 3.11+ for prebuilt wheels)
 
 Example MERGE (UPSERT) operation:
 ```python

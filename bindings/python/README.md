@@ -4,7 +4,7 @@
   
   <p><em>Python API for FSDB (File Store Database) - Access Delta Lake operations, SQL queries, time travel, and use Unix commands (`cat`, `grep`, `awk`, `sed`) to query and trigger Delta Lake transactions. Mount databases as POSIX filesystems where standard Unix tools execute ACID operations. Works with local filesystem directories and object storage/S3. Built on Rust for maximum performance.</em></p>
 
-[![Python](https://img.shields.io/badge/Python-3.8+-3776AB?logo=python&logoColor=white)](https://www.python.org)
+[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](https://www.python.org)
 [![PyPI](https://img.shields.io/badge/PyPI-fsdb--py-3776AB?logo=pypi&logoColor=white)](https://pypi.org/project/fsdb-py/)
 [![Delta Lake](https://img.shields.io/badge/Delta%20Lake-Native%20Format-00ADD8?logo=delta&logoColor=white)](https://delta.io)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](../../LICENSE.md)
@@ -39,6 +39,10 @@
 pip install fsdb-py
 ```
 
+**Requirements:**
+- **Python 3.11+** (required for prebuilt wheels with native library)
+- For other Python versions, install from source (see below)
+
 **PyPI Package:** https://pypi.org/project/fsdb-py/
 
 ### From Source
@@ -66,7 +70,7 @@ pip install -e .
 ```
 
 **Prerequisites:**
-- Python 3.8+
+- Python 3.8+ (3.11+ recommended for prebuilt wheels)
 - Rust 1.70+ (for building from source)
 - NFS client (built-in on macOS/Linux/Windows Pro)
 

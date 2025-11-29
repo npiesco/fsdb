@@ -55,6 +55,18 @@ ython bindings for FSDB with full Delta Lake and NFS server support.
 
 ## Installation
 
+### From PyPI (Recommended)
+
+```bash
+pip install fsdb-py
+```
+
+**Requirements:**
+- **Python 3.11+** (required for prebuilt wheels with native library)
+- For other Python versions, install from source (see below)
+
+### From Source
+
 ```bash
 # 1. Build Rust library
 cd fsdb
@@ -64,14 +76,19 @@ cargo build --release
 cargo run --bin uniffi-bindgen -- generate \
     --library target/release/libfsdb.dylib \
     --language python \
-    --out-dir ../bindings/python
+    --out-dir ../bindings/python/fsdb
 
-# 3. Copy library
-cp target/release/libfsdb.dylib ../bindings/python/
+# 3. Copy library to package directory
+cp target/release/libfsdb.dylib ../bindings/python/fsdb/
 
 # 4. Install Python package
 pip install -e ../bindings/python/
 ```
+
+**Prerequisites for building from source:**
+- Python 3.8+ (3.11+ recommended)
+- Rust 1.70+
+- NFS client (built-in on macOS/Linux/Windows Pro)
 
 ## Example: Buffered Insert (High Performance)
 
