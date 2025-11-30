@@ -790,12 +790,121 @@ impl NFSFileSystem for FsdbFilesystem {
 
     async fn rename(
         &self,
-        _from_dirid: fileid3,
-        _from_filename: &filename3,
-        _to_dirid: fileid3,
-        _to_filename: &filename3,
+        from_dirid: fileid3,
+        from_filename: &filename3,
+        to_dirid: fileid3,
+        to_filename: &filename3,
     ) -> std::result::Result<(), nfsstat3> {
-        Err(nfsstat3::NFS3ERR_NOTSUPP)
+        let from_name = String::from_utf8_lossy(from_filename.as_ref());
+        let to_name = String::from_utf8_lossy(to_filename.as_ref());
+        info!(
+            "NFS RENAME: from_dir={}, from={}, to_dir={}, to={}",
+            from_dirid, from_name, to_dirid, to_name
+        );
+
+        // Try to rename a created file
+        let created_files = self.created_files.lock().await;
+        let from_file_key = (from_dirid, from_name.to_string());
+        if let Some(file_metadata) = created_files.get(&from_file_key).cloned() {
+            drop(created_files); // Drop lock IMMEDIATELY
+
+            info!(
+                "Renaming file {} (ID {}) from dir {} to {} in dir {}",
+                from_name, file_metadata.file_id, from_dirid, to_name, to_dirid
+            );
+
+            // Check if target file already exists
+            let created_files = self.created_files.lock().await;
+            let to_file_key = (to_dirid, to_name.to_string());
+            if created_files.contains_key(&to_file_key) {
+                drop(created_files);
+                error!(
+                    "Target file {} already exists in dir {}",
+                    to_name, to_dirid
+                );
+                return Err(nfsstat3::NFS3ERR_EXIST);
+            }
+            drop(created_files); // Drop lock IMMEDIATELY
+
+            // Perform the rename: remove old entry, add new entry
+            let mut created_files = self.created_files.lock().await;
+            created_files.remove(&from_file_key);
+            created_files.insert(to_file_key, file_metadata.clone());
+            drop(created_files); // Drop lock IMMEDIATELY
+
+            // Update attr_cache to prevent getattr failures
+            self.attr_cache.set(file_metadata.file_id, fattr3 {
+                ftype: ftype3::NF3REG,
+                mode: 0o644,
+                nlink: 1,
+                uid: 1000,
+                gid: 1000,
+                size: file_metadata.content.len() as u64,
+                used: file_metadata.content.len() as u64,
+                rdev: specdata3::default(),
+                fsid: 0,
+                fileid: file_metadata.file_id,
+                atime: file_metadata.atime,
+                mtime: file_metadata.mtime,
+                ctime: file_metadata.ctime,
+            }).await;
+
+            info!(
+                "File renamed successfully: {} -> {}",
+                from_name, to_name
+            );
+            return Ok(());
+        }
+        drop(created_files); // Drop lock IMMEDIATELY
+
+        // Try to rename a created directory
+        let created_dirs = self.created_dirs.lock().await;
+        let from_dir_key = (from_dirid, from_name.to_string());
+        if let Some(dir_id) = created_dirs.get(&from_dir_key).cloned() {
+            drop(created_dirs); // Drop lock IMMEDIATELY
+
+            info!(
+                "Renaming directory {} (ID {}) from dir {} to {} in dir {}",
+                from_name, dir_id, from_dirid, to_name, to_dirid
+            );
+
+            // Check if target directory already exists
+            let created_dirs = self.created_dirs.lock().await;
+            let to_dir_key = (to_dirid, to_name.to_string());
+            if created_dirs.contains_key(&to_dir_key) {
+                drop(created_dirs);
+                error!(
+                    "Target directory {} already exists in dir {}",
+                    to_name, to_dirid
+                );
+                return Err(nfsstat3::NFS3ERR_EXIST);
+            }
+            drop(created_dirs); // Drop lock IMMEDIATELY
+
+            // Perform the rename: remove old entry, add new entry
+            let mut created_dirs = self.created_dirs.lock().await;
+            created_dirs.remove(&from_dir_key);
+            created_dirs.insert(to_dir_key, dir_id);
+            drop(created_dirs); // Drop lock IMMEDIATELY
+
+            // Update attr_cache to prevent getattr failures
+            let attr = Self::dir_attr(dir_id);
+            self.attr_cache.set(dir_id, attr).await;
+
+            info!(
+                "Directory renamed successfully: {} -> {}",
+                from_name, to_name
+            );
+            return Ok(());
+        }
+        drop(created_dirs); // Drop lock IMMEDIATELY
+
+        // Cannot rename built-in files/directories (data.csv, data/, etc.)
+        error!(
+            "Cannot rename built-in file/directory: {}",
+            from_name
+        );
+        Err(nfsstat3::NFS3ERR_ACCES)
     }
 
     async fn readdir(
