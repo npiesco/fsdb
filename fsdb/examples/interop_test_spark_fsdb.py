@@ -266,8 +266,36 @@ def test_posix_operations(spark, delta_path, temp_dir):
             except:
                 pass
         
+        # POSIX operation: cp (copy files)
+        print("\n7. Copy file with 'cp' command...")
+        source_file = mount_point / "test_cp_source.txt"
+        copied_file = mount_point / "test_cp_copy.txt"
+        try:
+            # Create source file
+            with open(source_file, 'w') as f:
+                f.write("Content to copy")
+            print(f"   Created: {source_file.name}")
+            
+            # Execute cp
+            print(f"   $ cp {source_file.name} {copied_file.name}")
+            cp_result = subprocess.run(["cp", str(source_file), str(copied_file)], 
+                                      capture_output=True, text=True, timeout=2)
+            if cp_result.returncode == 0:
+                if copied_file.exists() and source_file.exists():
+                    with open(copied_file, 'r') as f:
+                        if f.read() == "Content to copy":
+                            print("   ✓ cp successful - file copied with same content")
+                        else:
+                            print("   ✗ Content differs")
+                else:
+                    print("   ✗ Copy did not work correctly")
+            else:
+                print(f"   ✗ cp failed: {cp_result.stderr}")
+        except Exception as e:
+            print(f"   ✗ cp test failed: {e}")
+        
         # POSIX operation: rm (truncate table)
-        print("\n7. Truncate table with 'rm' command...")
+        print("\n8. Truncate table with 'rm' command...")
         print(f"   $ rm {csv_file}")
         try:
             # Get count before
@@ -303,7 +331,7 @@ def test_posix_operations(spark, delta_path, temp_dir):
             print(f"   ✗ rm test failed: {e}")
         
         # Unmount
-        print("\n8. Unmounting...")
+        print("\n9. Unmounting...")
         if sys.platform == "darwin":
             unmount_cmd = ["sudo", "umount", str(mount_point)]
         else:

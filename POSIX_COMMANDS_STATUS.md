@@ -1,12 +1,12 @@
 # POSIX File Operations - FSDB NFS Server
 
-**Status:** ✅ **mv (rename) command implemented and validated in Python examples**  
-**Last Updated:** November 29, 2025 7:52 PM EST  
+**Status:** ✅ **cp (copy) command validated - already working**  
+**Last Updated:** November 29, 2025 8:04 PM EST  
 **Test Results:** 
-- Rust integration tests: PASS (test_nfs_mv_rename_file, test_nfs_mv_rename_directory)
-- Python example validation: PASS (python_example.py, interop_test_spark_fsdb.py updated)
-- All existing tests: PASS, no regressions  
-**Next Command:** cp (copy files)
+- Rust integration test: PASS (test_nfs_cp_creates_file)
+- cp works via existing create() and write() NFS procedures
+- All tests: PASS, no regressions  
+**Next Command:** rmdir (remove directories)
 
 ## Commands That Trigger Delta Lake Operations (Hooked Up)
 
@@ -128,6 +128,16 @@ These commands **read data** but don't trigger Delta operations. They query the 
   ```
   **Note**: Cannot rename built-in files (data.csv) or directories (data/)
 
+- **`cp`** - Copy files → Creates new files with copied content
+  ```bash
+  cp /path/to/source.txt /mnt/fsdb/destination.txt
+  # → Creates new file in NFS mount with copied content
+  
+  cp /mnt/fsdb/file1.txt /mnt/fsdb/file2.txt
+  # → Copies files within NFS mount
+  ```
+  **Note**: Uses NFS create() and write() procedures
+
 ---
 
 ## Commands That Don't Work (Not Implemented)
@@ -135,7 +145,6 @@ These commands **read data** but don't trigger Delta operations. They query the 
 These commands return `NFS3ERR_NOTSUPP` (not supported):
 
 ### ❌ File Operations
-- **`cp`** - Copy files → Not supported (requires full `create` + `write` implementation)
 - **`rmdir`** - Remove directories → Not supported
 
 ---
@@ -150,9 +159,8 @@ These commands return `NFS3ERR_NOTSUPP` (not supported):
 | **Query/Read** | `cat`, `grep`, `awk`, `head`, `tail`, `sort`, `wc`, `cut`, `tr` | ✅ Works (reads Delta Lake) |
 | **File Metadata** | `stat` | ✅ Works (file info) |
 | **Directory** | `ls`, `cd`, `pwd`, `find` | ✅ Works (read-only) |
-| **Directory Management** | `mkdir`, `mv` | ✅ Implemented |
-| **Rename Operations** | `mv` (files & directories) | ✅ Implemented |
-| **Not Supported** | `cp`, `rmdir` | ❌ Not implemented |
+| **File/Directory Management** | `mkdir`, `mv`, `cp` | ✅ Implemented |
+| **Not Supported** | `rmdir` | ❌ Not implemented |
 
 ---
 
@@ -182,6 +190,12 @@ These commands return `NFS3ERR_NOTSUPP` (not supported):
    - Preserves file content and metadata (timestamps, permissions)
    - Updates attr_cache to prevent mount disconnections
    - Note: Only works for user-created files/directories, not built-in files
+
+5. **File Copy (`cp`)**:
+   - NFS `create()` called to create destination file
+   - NFS `write()` called to write source content to destination
+   - Creates new file with independent metadata (new file ID, timestamps)
+   - Works for copying into NFS mount or within NFS mount
 
 ### Read Operations (Query Delta Lake)
 

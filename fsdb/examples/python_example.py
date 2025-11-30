@@ -672,6 +672,37 @@ def main():
                         except:
                             pass
                     
+                    # 8.6. Test cp command (copy files)
+                    print(f"\n8.6. Copy file with cp command")
+                    source_file = mount_point / "test_source.txt"
+                    copied_file = mount_point / "test_copied.txt"
+                    try:
+                        # Create source file
+                        with open(source_file, 'w') as f:
+                            f.write("Content to copy")
+                        print(f"   Created source file: {source_file.name}")
+                        
+                        # Execute cp
+                        print(f"   $ cp {source_file.name} {copied_file.name}")
+                        result = subprocess.run(["cp", str(source_file), str(copied_file)], 
+                                              capture_output=True, text=True, timeout=2)
+                        if result.returncode == 0:
+                            # Verify copy worked
+                            if copied_file.exists() and source_file.exists():
+                                # Check content matches
+                                with open(copied_file, 'r') as f:
+                                    content = f.read()
+                                if content == "Content to copy":
+                                    print("   ✓ cp successful - file copied with same content")
+                                else:
+                                    print("   ✗ File copied but content differs")
+                            else:
+                                print("   ✗ cp did not create file correctly")
+                        else:
+                            print(f"   ✗ cp failed: {result.stderr}")
+                    except Exception as e:
+                        print(f"   ✗ cp test failed: {e}")
+                    
                     # 9. Test rm command (truncate table)
                     if csv_file.exists():
                         print(f"\n9. Truncate table with rm command")

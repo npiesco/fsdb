@@ -20,9 +20,11 @@ use tracing::{debug, info};
 /// Provides a fluent API for building MERGE operations.
 ///
 /// # Example
-/// ```ignore
+/// ```no_run
 /// use fsdb::delta_lake::merge::MergeBuilder;
+/// use deltalake::DeltaTable;
 ///
+/// # async fn example(target_table: DeltaTable) -> Result<(), Box<dyn std::error::Error>> {
 /// let result = MergeBuilder::new(target_table)
 ///     .with_source(source_data, "source")
 ///     .on("target.id = source.id")
@@ -37,6 +39,8 @@ use tracing::{debug, info};
 ///         .values_all()
 ///     .execute()
 ///     .await?;
+/// # Ok(())
+/// # }
 /// ```
 pub struct MergeBuilder {
     target: DeltaTable,

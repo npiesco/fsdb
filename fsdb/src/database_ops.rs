@@ -1442,11 +1442,12 @@ impl DatabaseOps {
     /// MERGE allows INSERT, UPDATE, and DELETE operations in a single atomic transaction.
     ///
     /// # Example
-    /// ```ignore
+    /// ```no_run
     /// use arrow::array::{Int32Array, StringArray};
     /// use arrow::datatypes::{DataType, Field, Schema};
     /// use arrow::record_batch::RecordBatch;
     /// use std::sync::Arc;
+    /// use fsdb::DatabaseOps;
     ///
     /// # async fn example(db: &DatabaseOps) -> Result<(), Box<dyn std::error::Error>> {
     /// // Create source data with changes

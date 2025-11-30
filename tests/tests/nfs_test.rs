@@ -4334,15 +4334,20 @@ async fn test_nfs_cp_creates_file() {
     println!("[TEST] Testing 'cp' command to copy file to NFS mount");
     let dest_file = mount_point.join("copied.txt");
 
-    // TDD: This should fail because create is not implemented yet
+    // macOS cp tries to copy extended attributes which NFS doesn't support
+    // Use -X flag to not copy extended attributes
+    #[cfg(target_os = "macos")]
+    let cp_args = vec!["-X", source_file.to_str().unwrap(), dest_file.to_str().unwrap()];
+    
+    #[cfg(not(target_os = "macos"))]
+    let cp_args = vec![source_file.to_str().unwrap(), dest_file.to_str().unwrap()];
+    
     let output = tokio::process::Command::new("cp")
-        .arg(&source_file)
-        .arg(&dest_file)
+        .args(&cp_args)
         .output()
         .await
         .expect("Failed to execute cp");
 
-    // TDD: This assertion will fail until create is implemented
     assert!(
         output.status.success(),
         "cp should succeed. stderr: {}",
