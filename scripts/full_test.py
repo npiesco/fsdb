@@ -53,7 +53,7 @@ async fn main() -> Result<(), Error> {
     ).unwrap();
     
     db.insert(batch).await?;
-    println!("✅ Database created with 3 rows");
+    println!("✓ Database created with 3 rows");
     Ok(())
 }
 '''
@@ -67,14 +67,14 @@ async fn main() -> Result<(), Error> {
     ret = run(f"cd {fsdb} && rustc --edition 2021 -L target/release/deps --extern fsdb=target/release/libfsdb.rlib --extern arrow=target/release/deps/libarrow-*.rlib --extern tokio=target/release/deps/libtokio-*.rlib {test_file} -o {test_dir}/create_db 2>&1 | head -20")
     
     if ret != 0:
-        print("\n⚠️  Compilation failed, trying simpler approach...")
+        print("\n ✗ Compilation failed, trying simpler approach...")
         # Just check if DB directory structure is valid
         run(f"mkdir -p {test_dir}/db/{{data_files,_wal,_metadata,_txn_log}}")
         run(f"echo '{{}}' > {test_dir}/db/_metadata/file_inventory.json")
-        print("✅ Created minimal DB structure")
+        print("✓ Created minimal DB structure")
     
     # Now try to mount
-    print("\n🗻 Attempting to mount...")
+    print("\n Attempting to mount...")
     print(f"   DB: {test_dir}/db")
     print(f"   Mount: {test_dir}/mount")
     
@@ -84,36 +84,36 @@ async fn main() -> Result<(), Error> {
     proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     
     # Wait a bit for mount
-    print("\n⏳ Waiting 3 seconds for mount to establish...")
+    print("\nWaiting 3 seconds for mount to establish...")
     time.sleep(3)
     
     # Check if mounted
-    print("\n🔍 Checking if mounted...")
+    print("\nChecking if mounted...")
     ret = run(f"mount | grep {test_dir}/mount")
     
     if ret == 0:
-        print("✅ Mount appears in mount table!")
+        print("✓ Mount appears in mount table!")
         
         # Try to access it
-        print("\n📂 Trying to list mount point...")
+        print("\nTrying to list mount point...")
         run(f"ls -la {test_dir}/mount")
         
-        print("\n📂 Trying to access with Python os.listdir...")
+        print("\nTrying to access with Python os.listdir...")
         try:
             entries = os.listdir(f"{test_dir}/mount")
-            print(f"✅ Python can read: {entries}")
+            print(f"✓ Python can read: {entries}")
         except Exception as e:
-            print(f"❌ Python cannot read: {e}")
+            print(f"✗ Python cannot read: {e}")
         
     else:
-        print("❌ Mount NOT in mount table")
+        print("✗ Mount NOT in mount table")
     
     # Check process
-    print("\n🔍 Checking for fsdb process...")
+    print("\nChecking for fsdb process...")
     run("ps aux | grep '[f]sdb' | grep -v grep")
     
     # Cleanup
-    print("\n🧹 Cleaning up...")
+    print("\nCleaning up...")
     proc.terminate()
     time.sleep(1)
     run(f"umount {test_dir}/mount 2>/dev/null || true")

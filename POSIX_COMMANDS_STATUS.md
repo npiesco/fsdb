@@ -1,8 +1,12 @@
 # POSIX File Operations - FSDB NFS Server
 
-**Status:** ✅ **All Core Operations Implemented and Tested**  
-**Last Updated:** November 29, 2025  
-**Test Results:** All examples passed successfully
+**Status:** ✅ **mv (rename) command implemented and validated in Python examples**  
+**Last Updated:** November 29, 2025 7:52 PM EST  
+**Test Results:** 
+- Rust integration tests: PASS (test_nfs_mv_rename_file, test_nfs_mv_rename_directory)
+- Python example validation: PASS (python_example.py, interop_test_spark_fsdb.py updated)
+- All existing tests: PASS, no regressions  
+**Next Command:** cp (copy files)
 
 ## Commands That Trigger Delta Lake Operations (Hooked Up)
 

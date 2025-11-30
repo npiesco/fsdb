@@ -230,8 +230,44 @@ def test_posix_operations(spark, delta_path, temp_dir):
         wc_result = subprocess.run(["wc", "-l", str(csv_file)], capture_output=True, text=True, timeout=2)
         print(f"✓ wc result: {wc_result.stdout.strip()}")
         
+        # POSIX operation: mv (rename files)
+        print("\n6. Rename file with 'mv' command...")
+        test_file = mount_point / "test_mv.txt"
+        renamed_file = mount_point / "test_mv_renamed.txt"
+        try:
+            # Create test file
+            with open(test_file, 'w') as f:
+                f.write("Test content for mv")
+            print(f"   Created: {test_file.name}")
+            
+            # Execute mv
+            print(f"   $ mv {test_file.name} {renamed_file.name}")
+            mv_result = subprocess.run(["mv", str(test_file), str(renamed_file)], 
+                                      capture_output=True, text=True, timeout=2)
+            if mv_result.returncode == 0:
+                if renamed_file.exists() and not test_file.exists():
+                    with open(renamed_file, 'r') as f:
+                        if f.read() == "Test content for mv":
+                            print("   ✓ mv successful - file renamed with content preserved")
+                            renamed_file.unlink()
+                        else:
+                            print("   ✗ Content not preserved")
+                else:
+                    print("   ✗ Rename did not work correctly")
+            else:
+                print(f"   ✗ mv failed: {mv_result.stderr}")
+        except Exception as e:
+            print(f"   ✗ mv test failed: {e}")
+            try:
+                if test_file.exists():
+                    test_file.unlink()
+                if renamed_file.exists():
+                    renamed_file.unlink()
+            except:
+                pass
+        
         # POSIX operation: rm (truncate table)
-        print("\n6. Truncate table with 'rm' command...")
+        print("\n7. Truncate table with 'rm' command...")
         print(f"   $ rm {csv_file}")
         try:
             # Get count before
@@ -267,7 +303,7 @@ def test_posix_operations(spark, delta_path, temp_dir):
             print(f"   ✗ rm test failed: {e}")
         
         # Unmount
-        print("\n7. Unmounting...")
+        print("\n8. Unmounting...")
         if sys.platform == "darwin":
             unmount_cmd = ["sudo", "umount", str(mount_point)]
         else:

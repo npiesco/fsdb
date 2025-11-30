@@ -626,6 +626,52 @@ def main():
                         except Exception as e:
                             print(f"   ✗ stat failed: {e}")
                     
+                    # 8.5. Test mv command (rename files)
+                    print(f"\n8.5. Rename file with mv command")
+                    test_file = mount_point / "test_rename.txt"
+                    renamed_file = mount_point / "test_renamed.txt"
+                    try:
+                        # Create a test file
+                        with open(test_file, 'w') as f:
+                            f.write("Test content for mv command")
+                        print(f"   Created test file: {test_file.name}")
+                        
+                        # Execute mv
+                        print(f"   $ mv {test_file.name} {renamed_file.name}")
+                        result = subprocess.run(["mv", str(test_file), str(renamed_file)], 
+                                              capture_output=True, text=True, timeout=2)
+                        if result.returncode == 0:
+                            # Verify rename worked
+                            if renamed_file.exists() and not test_file.exists():
+                                # Check content preserved
+                                with open(renamed_file, 'r') as f:
+                                    content = f.read()
+                                if content == "Test content for mv command":
+                                    print("   ✓ mv successful - file renamed with content preserved")
+                                else:
+                                    print("   ✗ File renamed but content changed")
+                            else:
+                                print("   ✗ mv did not rename file correctly")
+                            
+                            # Cleanup (note: file deletion not fully implemented for user files)
+                            try:
+                                if renamed_file.exists():
+                                    renamed_file.unlink()
+                            except:
+                                pass  # File deletion not supported for user-created files
+                        else:
+                            print(f"   ✗ mv failed: {result.stderr}")
+                    except Exception as e:
+                        print(f"   ✗ mv test failed: {e}")
+                        # Cleanup on error
+                        try:
+                            if test_file.exists():
+                                test_file.unlink()
+                            if renamed_file.exists():
+                                renamed_file.unlink()
+                        except:
+                            pass
+                    
                     # 9. Test rm command (truncate table)
                     if csv_file.exists():
                         print(f"\n9. Truncate table with rm command")
